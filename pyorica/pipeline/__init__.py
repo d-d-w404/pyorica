@@ -4,5 +4,6 @@ Requires: pip install pyorica[pipeline]
 """
 
 from pyorica.pipeline.pipeline import EEGPipeline
+from pyorica.pipeline.classify import ICLabelClassifier
 
-__all__ = ["EEGPipeline"]
+__all__ = ["EEGPipeline", "ICLabelClassifier"]

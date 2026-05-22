@@ -54,7 +54,9 @@ class EEGPipeline:
         self.orica.update(out)
         sources = self.orica.transform(out)
 
-        mask = self._classifier(sources, self.orica.weights_, self._sfreq)
+        # Pass mixing matrix A = pinv(W @ sphere) so ICLabelClassifier can build topomaps
+        mixing_matrix = np.linalg.pinv(self.orica.weights_ @ self.orica.sphere_)
+        mask = self._classifier(sources, mixing_matrix, self._sfreq)
         sources[mask] = 0.0
 
         return self.orica.inverse_transform(sources)
