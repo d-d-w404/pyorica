@@ -53,7 +53,7 @@ A preprocessing stage that removes gross transient artifacts from EEG before ORI
 _Avoid_: artifact removal, cleaning
 
 **Classifier**:
-Any callable `(sources, weights, sfreq) → artifact_mask` that identifies artifact ICs. The default implementation uses ICLabel; any callable with this signature is valid.
+Any callable `(sources, mixing_matrix, sfreq) → artifact_mask` that identifies artifact ICs. `mixing_matrix` is `A = pinv(W × sphere)` — the mixing matrix mapping source space back to channel space. The default implementation uses ICLabel; any callable with this signature is valid.
 _Avoid_: IC labeler, artifact detector
 
 ### Streaming and evaluation
