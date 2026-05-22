@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use pyorica, please cite both the algorithm paper and this software."
+title: "pyorica: Real-time EEG artifact removal via Online Recursive ICA"
+version: 0.1.0
+license: BSD-3-Clause
+repository-code: "https://github.com/goodshawn12/pyorica"
+authors:
+  - family-names: Hsu
+    given-names: Sheng-Hsiou (Shawn)
+    email: shawn.hsu@kuracare.com
+references:
+  - type: article
+    title: "Real-time adaptive EEG source separation using online recursive independent component analysis"
+    authors:
+      - family-names: Hsu
+        given-names: Sheng-Hsiou
+      - family-names: Mullen
+        given-names: Tim
+      - family-names: Jung
+        given-names: Tzyy-Ping
+      - family-names: Cauwenberghs
+        given-names: Gert
+    journal: "IEEE Transactions on Neural Systems and Rehabilitation Engineering"
+    volume: 24
+    issue: 3
+    start: 309
+    end: 319
+    year: 2016
+    doi: "10.1109/TNSRE.2015.2508103"
