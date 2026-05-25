@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyorica"
+version = "0.1.0"
+description = "Real-time EEG artifact removal via Online Recursive ICA"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "BSD-3-Clause" }
+authors = [
+    { name = "Sheng-Hsiou (Shawn) Hsu", email = "shawn.hsu@kuracare.com" }
+]
+keywords = ["EEG", "BCI", "ICA", "ORICA", "real-time", "artifact removal"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+lsl = ["pylsl>=1.16"]
+pipeline = [
+    "meegkit>=0.1.7",
+    "mne>=1.6",
+    "mne-icalabel>=0.6",
+]
+eval = [
+    "mne>=1.6",
+    "matplotlib>=3.7",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "ruff",
+    "scipy>=1.10",   # for loadmat in integration tests
+]
+full = ["pyorica[lsl,pipeline,eval]"]
+
+[project.urls]
+Homepage = "https://github.com/goodshawn12/pyorica"
+Repository = "https://github.com/goodshawn12/pyorica"
+Issues = "https://github.com/goodshawn12/pyorica/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: marks tests that require full dataset runs (deselect with -m 'not slow')"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["tests/data/**"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
