@@ -72,6 +72,31 @@ def test_no_calibration_does_not_call_fit():
     spy.assert_not_called()
 
 
+# ── Cycles 7-9: verbose mode fills stage arrays ──────────────────────────
+
+def test_nonverbose_stage_fields_are_none():
+    result = run(_make_pipeline(), _make_data(), chunk_size=CHUNK)
+    assert result.raw is None
+    assert result.iir is None
+    assert result.asr is None
+
+
+def test_verbose_stage_fields_have_input_shape():
+    data = _make_data()
+    result = run(_make_pipeline(), data, chunk_size=CHUNK, verbose=True)
+    assert result.raw.shape == data.shape
+    assert result.iir.shape == data.shape
+    assert result.asr.shape == data.shape
+
+
+def test_verbose_stage_dtypes_are_float64():
+    data = _make_data()
+    result = run(_make_pipeline(), data, chunk_size=CHUNK, verbose=True)
+    assert result.raw.dtype == np.float64
+    assert result.iir.dtype == np.float64
+    assert result.asr.dtype == np.float64
+
+
 # ── Cycle 6: pass-all classifier → rms_in ≈ rms_out (no zeroing) ─────────
 
 def test_pass_all_rms_ratio_near_one():

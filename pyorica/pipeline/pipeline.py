@@ -14,9 +14,10 @@ class EEGPipeline:
     """End-to-end EEG artifact removal pipeline."""
 
     def __init__(self, n_channels, sfreq, l_freq=1.0, h_freq=50.0,
-                 classifier=None, orica_kwargs=None):
+                 classifier=None, orica_kwargs=None, verbose=False):
         self._n_channels = n_channels
         self._sfreq = sfreq
+        self._verbose = verbose
         self._iir = IIRFilter(n_channels, sfreq, l_freq=l_freq, h_freq=h_freq)
         self._asr = None
         self.orica = ORICAFilter(n_channels, sfreq, **(orica_kwargs or {}))
@@ -25,11 +26,16 @@ class EEGPipeline:
 
     def fit(self, calibration_data):
         """Calibrate ASR and warm-start ORICA on calibration data."""
+        iir_calib = IIRFilter(self._n_channels, self._sfreq,
+                              l_freq=self._iir.l_freq, h_freq=self._iir.h_freq)
+        filtered = iir_calib.process(calibration_data)
+
         try:
             from meegkit.asr import ASR
             asr = ASR(sfreq=self._sfreq)
-            # ASR expects (samples × channels)
-            asr.fit(calibration_data.T)
+            # ASR expects (n_channels, n_samples); fit on IIR-filtered calibration
+            # because the online pipeline feeds IIR-filtered chunks to ASR.
+            asr.fit(filtered)
             self._asr = asr
             self._asr_fitted = True
         except (ImportError, Exception):
@@ -37,19 +43,24 @@ class EEGPipeline:
             # EEG-like statistics (e.g., synthetic Gaussian noise in tests)
             pass
 
-        iir_calib = IIRFilter(self._n_channels, self._sfreq,
-                              l_freq=self._iir.l_freq, h_freq=self._iir.h_freq)
-        filtered = iir_calib.process(calibration_data)
         self.orica.fit(filtered)
 
     def process(self, chunk):
         """Run IIR → ASR → ORICA → classify → reconstruct on a chunk."""
+        if self._verbose:
+            self._last_raw = chunk
+
         out = self._iir.process(chunk)
 
+        if self._verbose:
+            self._last_iir = out
+
         if self._asr_fitted and self._asr is not None:
-            # ASR expects (samples × channels), returns same
-            cleaned, _ = self._asr.transform(out.T)
-            out = cleaned.T
+            # ASR expects and returns (n_channels, n_samples)
+            out = self._asr.transform(out)
+
+        if self._verbose:
+            self._last_asr = out
 
         self.orica.update(out)
         sources = self.orica.transform(out)

@@ -89,6 +89,33 @@ def test_fit_changes_orica_weights():
         "fit() should warm-start ORICA weights"
 
 
+# ── Cycles 8-10: verbose mode stores stage arrays ────────────────────────
+
+def test_verbose_stores_last_raw_shape():
+    p = EEGPipeline(n_channels=N_CH, sfreq=SFREQ, verbose=True)
+    chunk = RNG.standard_normal((N_CH, CHUNK))
+    p.process(chunk)
+    assert hasattr(p, '_last_raw')
+    assert p._last_raw.shape == chunk.shape
+
+
+def test_verbose_stores_last_iir_and_asr_shape():
+    p = EEGPipeline(n_channels=N_CH, sfreq=SFREQ, verbose=True)
+    chunk = RNG.standard_normal((N_CH, CHUNK))
+    p.process(chunk)
+    assert p._last_iir.shape == chunk.shape
+    assert p._last_asr.shape == chunk.shape
+
+
+def test_verbose_false_stores_no_stage_attrs():
+    p = EEGPipeline(n_channels=N_CH, sfreq=SFREQ)  # verbose=False by default
+    chunk = RNG.standard_normal((N_CH, CHUNK))
+    p.process(chunk)
+    assert not hasattr(p, '_last_raw')
+    assert not hasattr(p, '_last_iir')
+    assert not hasattr(p, '_last_asr')
+
+
 # ── Cycle 7: high-amplitude transient is attenuated ───────────────────────
 
 def test_transient_artifact_is_attenuated():

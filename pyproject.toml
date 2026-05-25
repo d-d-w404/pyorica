@@ -32,10 +32,10 @@ lsl = ["pylsl>=1.16"]
 pipeline = [
     "meegkit>=0.1.7",
     "mne>=1.6",
-    "mne-icalabel>=0.6",
 ]
 eval = [
     "mne>=1.6",
+    "mne-icalabel>=0.6",
     "matplotlib>=3.7",
 ]
 dev = [
@@ -54,6 +54,10 @@ Issues = "https://github.com/goodshawn12/pyorica/issues"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: marks tests that require full dataset runs (deselect with -m 'not slow')"]
+filterwarnings = [
+    # meegkit internal NumPy scalar-from-array deprecation — upstream issue, not ours
+    "ignore::DeprecationWarning:meegkit",
+]
 
 [tool.hatch.build.targets.sdist]
 exclude = ["tests/data/**"]
