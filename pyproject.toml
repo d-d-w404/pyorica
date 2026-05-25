@@ -54,6 +54,10 @@ Issues = "https://github.com/goodshawn12/pyorica/issues"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: marks tests that require full dataset runs (deselect with -m 'not slow')"]
+filterwarnings = [
+    # meegkit internal NumPy scalar-from-array deprecation — upstream issue, not ours
+    "ignore::DeprecationWarning:meegkit",
+]
 
 [tool.hatch.build.targets.sdist]
 exclude = ["tests/data/**"]
