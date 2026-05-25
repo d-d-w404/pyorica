@@ -116,8 +116,9 @@ def test_ic_field_is_sequential_index():
 # ── Cycle 6 (slow): integration with real MNE ICA + ICLabel ──────────────
 
 @pytest.mark.slow
-@pytest.mark.filterwarnings("ignore::RuntimeWarning:mne")
-@pytest.mark.filterwarnings("ignore::RuntimeWarning:mne_icalabel")
+@pytest.mark.filterwarnings("ignore:The data has not been high-pass filtered:RuntimeWarning")
+@pytest.mark.filterwarnings("ignore:The provided Raw instance does not seem:RuntimeWarning")
+@pytest.mark.filterwarnings("ignore:The provided Raw instance is not filtered:RuntimeWarning")
 def test_integration_real_ica_and_iclabel():
     """Full run through MNE ICA + ICLabel on synthetic data; checks structure only."""
     iir, asr, orica = _make_stages()
