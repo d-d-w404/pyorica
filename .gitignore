@@ -16,3 +16,4 @@ venv/
 # Allow benchmark dataset committed under tests/data/
 !tests/data/*.set
 !tests/data/*.fdt
+benchmarks/results/

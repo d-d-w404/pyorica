@@ -32,10 +32,10 @@ lsl = ["pylsl>=1.16"]
 pipeline = [
     "meegkit>=0.1.7",
     "mne>=1.6",
-    "mne-icalabel>=0.6",
 ]
 eval = [
     "mne>=1.6",
+    "mne-icalabel>=0.6",
     "matplotlib>=3.7",
 ]
 dev = [

@@ -70,6 +70,26 @@ _Avoid_: recording, file, subject
 The evaluation mode in which a session file is fed through the pipeline one chunk at a time using `ArrayStream`, preserving all stateful behavior (filter state, ORICA weights, ASR state) across chunks exactly as in a live stream.
 _Avoid_: offline processing, batch processing, replay
 
+**Stage arrays**:
+The four full-session channel-space arrays captured during a verbose pipeline run: `raw` (pre-IIR), `iir` (post-IIR), `asr` (post-ASR), and `orica` (post-reconstruction). Accumulated by the eval runner when `verbose=True`; all `None` otherwise.
+_Avoid_: intermediate outputs, pipeline outputs, saved stages
+
+**Verbose mode**:
+A pipeline operating mode (`EEGPipeline(verbose=True)`) in which the pipeline stores the most recent intermediate chunk for each stage as attributes (`_last_raw`, `_last_iir`, `_last_asr`) after each `process()` call, allowing the runner to accumulate stage arrays.
+_Avoid_: debug mode, logging mode
+
+**Offline ICA analysis**:
+A post-run validation procedure in `eval/ica_analysis.py` that fits MNE extended-Infomax ICA on the full IIR stage array, then projects all three filtered stage arrays (IIR, ASR, ORICA) through the resulting unmixing matrix to compute per-IC source MS energy and percent reduction vs IIR. ICs are classified by ICLabel. Distinct from the online ORICA decomposition used during the pipeline run.
+_Avoid_: offline ICA, validation ICA, post-processing ICA
+
+**IC source MS energy**:
+The mean-square energy of a single IC's source time series, computed as `mean(source²)` over all samples (or a masked subset excluding bad segments). Used as the primary metric in offline ICA analysis to compare artifact reduction across pipeline stages.
+_Avoid_: IC power, source variance, IC energy
+
+**Benchmark**:
+A script in `benchmarks/` that loads sessions from a local dataset (path from `PYORICA_NCTU_DATA` env var), runs the pipeline in verbose mode, performs offline ICA analysis per session, and writes per-subject CSV results. Not part of the test suite.
+_Avoid_: experiment, validation script, evaluation script
+
 ## Relationships
 
 - A **Stream** yields one **Chunk** at a time to the **Pipeline**
@@ -78,6 +98,9 @@ _Avoid_: offline processing, batch processing, replay
 - The **Classifier** receives ORICA's sources and returns an artifact mask; it does not modify **ORICA** state
 - The eval `runner` wraps an `ArrayStream` + **Pipeline** to process a **Session** in **Simulated real-time**
 - **Calibration data** is passed to `fit()` on both ASR and ORICA before streaming begins; it is not a **Session**
+- In **verbose mode**, the runner accumulates **stage arrays** (`raw`, `iir`, `asr`, `orica`) alongside the normal `RunResult`
+- **Offline ICA analysis** consumes the **stage arrays** from a verbose run; it uses a separate stable ICA decomposition, not the online ORICA weights, to ensure the measurement is independent of convergence state
+- **IC source MS energy** is computed per IC per stage inside **offline ICA analysis**; ICLabel class labels come from `mne-icalabel` applied to the ICA fitted on the IIR stage array
 
 ## Example dialogue
 
