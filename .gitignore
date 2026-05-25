@@ -13,3 +13,6 @@ venv/
 *.fif
 *.set
 *.fdt
+# Allow benchmark dataset committed under tests/data/
+!tests/data/*.set
+!tests/data/*.fdt

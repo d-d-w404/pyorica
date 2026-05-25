@@ -10,11 +10,11 @@ from pyorica.eval.loader import load_set, load_fif, load_dataset
 
 SET_PATH = os.path.join(
     os.path.dirname(__file__),
-    "../../../code/orica/SIM_STAT_16ch_3min.set",
+    "data/SIM_STAT_16ch_3min.set",
 )
 FDT_PATH = os.path.join(
     os.path.dirname(__file__),
-    "../../../code/orica/SIM_STAT_16ch_3min.fdt",
+    "data/SIM_STAT_16ch_3min.fdt",
 )
 
 

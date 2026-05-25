@@ -55,6 +55,9 @@ Issues = "https://github.com/goodshawn12/pyorica/issues"
 testpaths = ["tests"]
 markers = ["slow: marks tests that require full dataset runs (deselect with -m 'not slow')"]
 
+[tool.hatch.build.targets.sdist]
+exclude = ["tests/data/**"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
