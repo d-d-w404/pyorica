@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>pyorica — Evaluation Framework</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 24px;
+      color: #1a1a1a;
+      background: #fff;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 4px; }
+    h2 { font-size: 1.1rem; margin-top: 40px; margin-bottom: 8px; color: #333; }
+    p.subtitle { color: #555; margin-top: 0; margin-bottom: 32px; }
+    .mermaid { background: #f8f9fa; border-radius: 8px; padding: 24px; margin-bottom: 32px; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.9rem; margin-top: 16px; }
+    th, td { text-align: left; padding: 8px 12px; border: 1px solid #ddd; }
+    th { background: #f0f0f0; }
+    code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 0.85em; }
+    .note { background: #fff8e1; border-left: 4px solid #ff9800; padding: 12px 16px;
+            border-radius: 4px; margin: 16px 0; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>pyorica — Evaluation Framework</h1>
+  <p class="subtitle">
+    Offline benchmark workflow: a session file is replayed chunk-by-chunk through the
+    same stateful pipeline used in live streaming, then post-hoc ICA analysis measures
+    per-IC artifact energy reduction across all pipeline stages.
+  </p>
+
+  <h2>Per-subject pipeline</h2>
+  <div class="mermaid">
+flowchart TD
+    A["📂 Session file
+    .set or .fif"]
+    B["🔧 loader
+    load_set() / load_fif()
+    returns: data (ch × samples), sfreq, ch_names"]
+    C["⏩ ArrayStream
+    chunk-by-chunk replay
+    preserves all stateful pipeline behavior
+    identical code path to live LSL"]
+    D["⚙️ EEGPipeline  (verbose=True)
+    stores _last_raw, _last_iir, _last_asr
+    after each process() call"]
+    E["📊 RunResult
+    raw · iir · asr · orica
+    four stage arrays, shape (ch × samples) each"]
+    F["🔬 ic_source_energy()
+    offline MNE extended-Infomax ICA
+    fitted once on full IIR stage array
+    unmixing matrix applied to IIR, ASR, and ORICA"]
+    G["🏷️ ICLabel classification
+    labels each IC: brain / muscle / eye
+    heart / line noise / channel noise / other"]
+    H["📄 per-subject CSV
+    ic · label · ms_iir · ms_asr · ms_orica
+    pct_asr · pct_orica"]
+
+    A --> B --> C --> D --> E --> F --> G --> H
+
+    style A fill:#e8f4fd,stroke:#2196f3
+    style E fill:#f3e5f5,stroke:#9c27b0
+    style F fill:#fce4ec,stroke:#e91e63
+    style H fill:#e8f5e9,stroke:#4caf50
+  </div>
+
+  <div class="note">
+    <strong>Design note:</strong> The offline ICA in <code>ic_source_energy()</code> is a
+    separate measurement tool — it uses a stable MNE decomposition fitted on the IIR stage,
+    <em>not</em> the online ORICA weights. This ensures the metric is independent of ORICA's
+    convergence state and gives a reproducible ground-truth comparison across stages.
+  </div>
+
+  <h2>Cross-session aggregation</h2>
+  <div class="mermaid">
+flowchart LR
+    subgraph subjects ["Per subject (run_all_subjects.py)"]
+        direction TB
+        S1["s1_ic_source_energy.csv"]
+        S2["s2_ic_source_energy.csv"]
+        SN["sN_ic_source_energy.csv"]
+    end
+
+    subgraph agg ["Aggregation (aggregate_results.py)"]
+        direction TB
+        M["Within-subject
+        median per ICLabel class"]
+        X["Cross-subject
+        mean ± SD"]
+    end
+
+    subgraph out ["Outputs"]
+        direction TB
+        P["cross_session_results.png
+        two bar charts:
+        ASR vs IIR · ORICA vs IIR
+        all 7 ICLabel classes"]
+        C["cross_session_summary.csv
+        class · mean · SD · n_subjects"]
+    end
+
+    subjects --> agg --> out
+
+    style subjects fill:#e8f4fd,stroke:#2196f3
+    style agg fill:#fff8e1,stroke:#ff9800
+    style out fill:#e8f5e9,stroke:#4caf50
+  </div>
+
+  <h2>ICLabel classes</h2>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Typical source</th><th>Expected reduction (ORICA vs IIR)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>brain</td><td>Neural oscillations</td><td>Low (preserved)</td></tr>
+      <tr><td>muscle</td><td>EMG artifacts</td><td>High</td></tr>
+      <tr><td>eye</td><td>EOG / blink / saccade</td><td>High</td></tr>
+      <tr><td>heart</td><td>ECG pulse artifact</td><td>Moderate–High</td></tr>
+      <tr><td>line noise</td><td>50/60 Hz electrical interference</td><td>High</td></tr>
+      <tr><td>channel noise</td><td>Single-electrode artefacts</td><td>High</td></tr>
+      <tr><td>other</td><td>Unclassified</td><td>Variable</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Correspondence to original ORICA pipeline</h2>
+  <table>
+    <thead>
+      <tr><th>Aspect</th><th>Original ORICA (receiver.py)</th><th>pyorica</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>ASR backend</td>
+        <td><code>EEG_ASR_BACKEND=asrpy</code> (reference)</td>
+        <td><code>PipelineConfig.asr_backend="asrpy"</code></td>
+      </tr>
+      <tr>
+        <td>ASR cutoff</td>
+        <td><code>EEG_ASR_CUTOFF=20</code></td>
+        <td><code>PipelineConfig.asr_cutoff=20.0</code></td>
+      </tr>
+      <tr>
+        <td>Calibration window</td>
+        <td>first 2 min, IIR-filtered</td>
+        <td><code>PipelineConfig.asr_calibration_seconds=120.0</code></td>
+      </tr>
+      <tr>
+        <td>ICLabel threshold</td>
+        <td><code>EEG_ICALABEL_THRESHOLD=0.7</code></td>
+        <td><code>PipelineConfig.icalabel_threshold=0.7</code></td>
+      </tr>
+      <tr>
+        <td>Bad-segment exclusion</td>
+        <td>Manual per-subject ranges</td>
+        <td>Not implemented (future milestone)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+  </script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>pyorica — Real-Time Pipeline</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 860px;
+      margin: 40px auto;
+      padding: 0 24px;
+      color: #1a1a1a;
+      background: #fff;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 4px; }
+    p.subtitle { color: #555; margin-top: 0; margin-bottom: 32px; }
+    .mermaid { background: #f8f9fa; border-radius: 8px; padding: 24px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 32px; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 8px 12px; border: 1px solid #ddd; }
+    th { background: #f0f0f0; }
+    code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <h1>pyorica — Real-Time Pipeline</h1>
+  <p class="subtitle">
+    Per-chunk data flow: each stage is stateful and processes one chunk at a time,
+    preserving filter state, ASR calibration, and ORICA weights across calls.
+  </p>
+
+  <div class="mermaid">
+flowchart TD
+    A["🔌 LSL stream / ArrayStream
+    (live inlet or file replay)"]
+    B["📦 Chunk
+    shape: channels × samples"]
+    C["〰️ IIRFilter
+    Butterworth bandpass 1–50 Hz
+    sosfilt · persistent zi state per channel"]
+    D["🧹 ASRAdapter
+    Artifact Subspace Reconstruction
+    backend: asrpy (default) or meegkit
+    stateful R / Zi / cov across chunks"]
+    E["🔄 ORICAFilter
+    Online Recursive ICA
+    update() adapts W and sphere
+    transform() maps EEG → source space"]
+    F["🏷️ Classifier
+    ICLabel: (sources, mixing_matrix, sfreq) → artifact_mask
+    zero artifact ICs in source space"]
+    G["↩️ Reconstruction
+    pinv(W × sphere) · inverse_transform()
+    sensor space restored, artifact energy suppressed"]
+    H["✅ Cleaned chunk
+    shape: channels × samples"]
+
+    A --> B --> C --> D --> E --> F --> G --> H
+
+    style A fill:#e8f4fd,stroke:#2196f3
+    style H fill:#e8f5e9,stroke:#4caf50
+    style D fill:#fff8e1,stroke:#ff9800
+    style E fill:#fce4ec,stroke:#e91e63
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Stage</th>
+        <th>Input shape</th>
+        <th>Output shape</th>
+        <th>Persistent state</th>
+        <th>Configured by</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>IIRFilter</td>
+        <td><code>(ch, samples)</code></td>
+        <td><code>(ch, samples)</code></td>
+        <td>filter zi per channel</td>
+        <td><code>iir_l_freq</code>, <code>iir_h_freq</code>, <code>iir_order</code></td>
+      </tr>
+      <tr>
+        <td>ASRAdapter</td>
+        <td><code>(ch, samples)</code></td>
+        <td><code>(ch, samples)</code></td>
+        <td>R, Zi, cov (asrpy)</td>
+        <td><code>asr_backend</code>, <code>asr_cutoff</code></td>
+      </tr>
+      <tr>
+        <td>ORICAFilter</td>
+        <td><code>(ch, samples)</code></td>
+        <td><code>(comp, samples)</code></td>
+        <td>W, sphere</td>
+        <td><code>orica_ff_profile</code>, <code>orica_lambda_0</code>, …</td>
+      </tr>
+      <tr>
+        <td>Classifier</td>
+        <td><code>(comp, samples)</code></td>
+        <td><code>bool mask (comp,)</code></td>
+        <td>none</td>
+        <td><code>icalabel_threshold</code></td>
+      </tr>
+      <tr>
+        <td>Reconstruction</td>
+        <td><code>(comp, samples)</code></td>
+        <td><code>(ch, samples)</code></td>
+        <td>none</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+  </script>
+</body>
+</html>

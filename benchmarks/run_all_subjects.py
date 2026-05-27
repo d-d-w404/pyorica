@@ -4,17 +4,25 @@ Discovers subjects under PYORICA_NCTU_DATA, runs each through the pyorica
 pipeline (using run_validation.run_subject), and writes per-subject CSVs to a
 timestamped run directory. Resumable: subjects with existing CSVs are skipped.
 
-Usage
------
-    export PYORICA_NCTU_DATA=/path/to/dataset_2019_TBME
-    python benchmarks/run_all_subjects.py [--config config.yaml]
-                                          [--output-dir benchmarks/results]
-                                          [--subjects s1 s3 ...]
+Recommended workflow
+--------------------
+1. Generate an annotated config file and edit it:
+
+       python benchmarks/run_all_subjects.py --generate-config config.yaml
+
+2. Run the full benchmark using that config:
+
+       export PYORICA_NCTU_DATA=/path/to/dataset_2019_TBME
+       python benchmarks/run_all_subjects.py --config config.yaml
+
+3. Aggregate results:
+
+       python benchmarks/aggregate_results.py --run-dir benchmarks/results/run_YYYYMMDD_HHMMSS
 
 Output
 ------
     benchmarks/results/run_YYYYMMDD_HHMMSS/
-        config.yaml                     pipeline parameters
+        config.yaml                     exact parameters used (annotated)
         s1_ic_source_energy.csv
         s2_ic_source_energy.csv
         ...
@@ -49,11 +57,19 @@ def main() -> None:
     from benchmarks.run_validation import run_subject
 
     parser = argparse.ArgumentParser(
-        description="Batch pyorica benchmark — all subjects in PYORICA_NCTU_DATA."
+        description="Batch pyorica benchmark — all subjects in PYORICA_NCTU_DATA.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--generate-config", metavar="PATH",
+        help=(
+            "Write an annotated default config YAML to PATH and exit. "
+            "Edit the file, then re-run with --config PATH."
+        ),
     )
     parser.add_argument(
         "--config", metavar="YAML",
-        help="Path to a PipelineConfig YAML file. Defaults to reference experiment settings.",
+        help="Path to a PipelineConfig YAML file (required to run the benchmark).",
     )
     parser.add_argument(
         "--output-dir", default="benchmarks/results",
@@ -65,7 +81,22 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    config = PipelineConfig.from_yaml(args.config) if args.config else PipelineConfig()
+    if args.generate_config:
+        out = Path(args.generate_config)
+        PipelineConfig().to_yaml(out)
+        print(f"Config written to {out.resolve()}")
+        print(f"Review and edit, then run:")
+        print(f"  python benchmarks/run_all_subjects.py --config {out}")
+        return
+
+    if not args.config:
+        parser.error(
+            "--config YAML is required. Generate a default config first:\n"
+            "  python benchmarks/run_all_subjects.py --generate-config config.yaml"
+        )
+
+    config = PipelineConfig.from_yaml(args.config)
+    print(f"Config loaded from {Path(args.config).resolve()}")
 
     data_root_env = os.environ.get("PYORICA_NCTU_DATA", "")
     if not data_root_env:
