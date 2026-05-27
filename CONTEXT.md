@@ -52,6 +52,26 @@ _Avoid_: back-projection, inverse transform
 A preprocessing stage that removes gross transient artifacts from EEG before ORICA sees the data. Runs before ORICA in the pipeline.
 _Avoid_: artifact removal, cleaning
 
+**ASR backend**:
+The library used to implement ASR — either `"asrpy"` (default; matches reference experiments) or `"meegkit"` (alternative for comparison). Recorded in `PipelineConfig.asr_backend`.
+_Avoid_: ASR library, ASR implementation
+
+**ASR cutoff**:
+The standard-deviation multiplier (e.g. `20`) used by ASR to threshold artifact subspaces. Higher values = less aggressive cleaning.
+_Avoid_: ASR threshold, ASR parameter
+
+**PipelineConfig**:
+A Python dataclass capturing all parameters needed to reproduce a pipeline run: IIR band edges and order, ASR backend/cutoff/calibration seconds, ORICA forgetting-factor profile and hyperparameters, and ICLabel threshold. Serialized to/from YAML. Saved alongside every benchmark output.
+_Avoid_: config, settings, parameters
+
+**Batch runner**:
+`benchmarks/run_all_subjects.py` — discovers all sessions in the benchmark dataset, processes each through the pipeline in simulated real-time, and writes per-subject CSVs + a `config.yaml`. Resumable: skips subjects whose output already exists.
+_Avoid_: bulk runner, dataset runner
+
+**Cross-session aggregation**:
+`benchmarks/aggregate_results.py` — reads all per-subject CSVs, computes within-subject median IC source MS energy per ICLabel class, then cross-subject mean ± SD. Produces two bar charts (ASR vs IIR, ORICA vs IIR) across all 7 ICLabel classes.
+_Avoid_: cross-subject aggregation, multi-subject analysis
+
 **Classifier**:
 Any callable `(sources, mixing_matrix, sfreq) → artifact_mask` that identifies artifact ICs. `mixing_matrix` is `A = pinv(W × sphere)` — the mixing matrix mapping source space back to channel space. The default implementation uses ICLabel; any callable with this signature is valid.
 _Avoid_: IC labeler, artifact detector
