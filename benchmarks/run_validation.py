@@ -7,6 +7,7 @@ Usage
 -----
     export PYORICA_NCTU_DATA=/path/to/dataset_2019_TBME
     python benchmarks/run_validation.py [--subjects s1 s3 ...] [--output-dir results]
+                                        [--config config.yaml]
 
 Environment
 -----------
@@ -18,6 +19,8 @@ Output
 ------
 One CSV per subject at ``{output_dir}/s{N}_ic_source_energy.csv`` with columns:
     ic, label, ms_iir, ms_asr, ms_orica, pct_asr, pct_orica
+
+A ``config.yaml`` capturing all pipeline parameters is also written to output_dir.
 """
 
 from __future__ import annotations
@@ -30,8 +33,6 @@ from pathlib import Path
 
 import numpy as np
 
-
-CALIB_SECONDS = 120   # first 2 min used for ASR calibration
 # ICLabel's MNE FIR filter (length ~825 at 250 Hz) needs > 825 samples per chunk.
 # 1000 samples = 4 s at 250 Hz gives comfortable headroom.
 CHUNK_SIZE = 1000
@@ -39,8 +40,6 @@ CHUNK_SIZE = 1000
 
 def _find_sessions(root: Path) -> list[Path]:
     sessions = sorted(root.glob("s*/s*_resampled.set"))
-    # exclude any _cleanSec variants (they won't match *_resampled.set without _cleanSec,
-    # but guard explicitly)
     return [p for p in sessions if "_cleanSec" not in p.name]
 
 
@@ -79,8 +78,23 @@ def _make_mne_info(ch_names: list[str], sfreq: float):
     return info
 
 
-def _run_subject(set_path: Path, output_dir: Path, icalabel_threshold: float) -> None:
-    import mne
+def run_subject(set_path: Path, config, out_dir: Path) -> Path:
+    """Run the full pipeline for one subject and write outputs to out_dir.
+
+    Parameters
+    ----------
+    set_path : Path
+        Path to the subject's .set file.
+    config : PipelineConfig
+        Pipeline configuration (determines ASR backend, cutoff, ORICA params, etc.).
+    out_dir : Path
+        Directory to write {subject}_ic_source_energy.csv and config.yaml.
+
+    Returns
+    -------
+    Path
+        Path to the written CSV file.
+    """
     from pyorica.eval.ica_analysis import ic_source_energy
     from pyorica.eval.runner import run
     from pyorica.pipeline.classify import ICLabelClassifier
@@ -91,18 +105,19 @@ def _run_subject(set_path: Path, output_dir: Path, icalabel_threshold: float) ->
     data, sfreq, ch_names = _load_set(set_path)
     n_ch, n_samples = data.shape
 
-    calib_samples = int(CALIB_SECONDS * sfreq)
+    calib_samples = int(config.asr_calibration_seconds * sfreq)
     calibration = data[:, :calib_samples]
 
     print(f"[{subject}] {n_ch} ch, {sfreq} Hz, {n_samples} samples "
-          f"({n_samples/sfreq:.0f} s) — calib {CALIB_SECONDS} s")
+          f"({n_samples/sfreq:.0f} s) — calib {config.asr_calibration_seconds:.0f} s")
 
     info = _make_mne_info(ch_names, sfreq)
-    classifier = ICLabelClassifier(info, threshold=icalabel_threshold)
+    classifier = ICLabelClassifier(info, threshold=config.icalabel_threshold)
     pipeline = EEGPipeline(n_channels=n_ch, sfreq=sfreq,
-                           classifier=classifier, verbose=True)
+                           classifier=classifier, verbose=True, config=config)
 
-    print(f"[{subject}] running pipeline (ICLabel threshold={icalabel_threshold}, "
+    print(f"[{subject}] running pipeline (ASR={config.asr_backend}, "
+          f"cutoff={config.asr_cutoff}, ICLabel threshold={config.icalabel_threshold}, "
           f"chunk={CHUNK_SIZE} samples)...")
     result = run(pipeline, data, chunk_size=CHUNK_SIZE,
                  calibration_data=calibration, verbose=True)
@@ -113,17 +128,22 @@ def _run_subject(set_path: Path, output_dir: Path, icalabel_threshold: float) ->
         ch_names, sfreq,
     )
 
-    out_path = output_dir / f"{subject}_ic_source_energy.csv"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{subject}_ic_source_energy.csv"
     fieldnames = ["ic", "label", "ms_iir", "ms_asr", "ms_orica", "pct_asr", "pct_orica"]
     with open(out_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
+    config.to_yaml(out_dir / "config.yaml")
     print(f"[{subject}] written → {out_path}")
+    return out_path
 
 
 def main() -> None:
+    from pyorica.config import PipelineConfig
+
     parser = argparse.ArgumentParser(description="pyorica IC source energy benchmark")
     parser.add_argument(
         "--subjects", nargs="*", metavar="SID",
@@ -134,10 +154,12 @@ def main() -> None:
         help="Directory for per-subject CSVs (default: benchmarks/results).",
     )
     parser.add_argument(
-        "--icalabel-threshold", type=float, default=0.7,
-        help="ICLabel probability threshold for artifact rejection (default: 0.7).",
+        "--config", metavar="YAML",
+        help="Path to a PipelineConfig YAML file. Defaults to reference experiment settings.",
     )
     args = parser.parse_args()
+
+    config = PipelineConfig.from_yaml(args.config) if args.config else PipelineConfig()
 
     data_root_env = os.environ.get("PYORICA_NCTU_DATA", "")
     if not data_root_env:
@@ -173,7 +195,7 @@ def main() -> None:
     errors = []
     for set_path in sessions:
         try:
-            _run_subject(set_path, output_dir, args.icalabel_threshold)
+            run_subject(set_path, config, output_dir)
         except Exception as exc:
             subject = set_path.parent.name
             print(f"[{subject}] ERROR: {exc}", file=sys.stderr)

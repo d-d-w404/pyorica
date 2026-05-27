@@ -30,8 +30,10 @@ dependencies = [
 [project.optional-dependencies]
 lsl = ["pylsl>=1.16"]
 pipeline = [
+    "asrpy>=0.1",
     "meegkit>=0.1.7",
     "mne>=1.6",
+    "pyyaml>=6.0",
 ]
 eval = [
     "mne>=1.6",

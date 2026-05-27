@@ -1,0 +1,67 @@
+# Original ORICA pipeline configuration
+# Extracted from ORICA/code/receiver.py, ORICA_final_no_print_quick30.py,
+# run_two_instances_Driving.py, and aa_lsl_npz.py.
+# Reference experiment: SN_Driveasrpy20_2min_70 (subject s28_resampled).
+
+# ── IIR bandpass filter ──────────────────────────────────────────────
+# Online causal Butterworth bandpass; initialized once, state (zi) carried
+# across chunks (lfilter / lfilter_zi).  receiver.py:60,1108–1141
+iir_l_freq: 1.0            # lower cutoff (Hz)
+iir_h_freq: 50.0           # upper cutoff (Hz)
+iir_order: 4               # filter order (4th-order Butterworth)
+
+# ── Online notch filter ──────────────────────────────────────────────
+# Causal IIR notch applied immediately after IIR bandpass (method=4).
+# Controlled by EEG_NOTCH_FREQ env var; 0 disables.  receiver.py:66–76
+notch_freq: 60.0           # Hz; US power-line default (set 50 for EU)
+notch_q: 30.0              # quality factor of the IIR notch
+
+# ── ASR (Artifact Subspace Reconstruction) ──────────────────────────
+# Backend set via EEG_ASR_BACKEND env var in run_two_instances_Driving.py.
+# Code default is "meegkit"; reference experiments force "asrpy".
+# receiver.py:89, run_two_instances_Driving.py:env["EEG_ASR_BACKEND"]
+asr_backend: "asrpy"       # "asrpy" (reference) or "meegkit" (code default)
+asr_cutoff: 20.0           # SD multiplier (EEG_ASR_CUTOFF=20)
+asr_calibration_seconds: 120.0  # first 2 min of IIR-filtered data (asr_cali/…/2min/)
+
+# ASR is applied in 0.5-second accumulation windows before each call.
+# receiver.py:609  target_len = int(srate * 0.5)
+asr_accum_window_sec: 0.5
+
+# ── ORICA (Online Recursive ICA) ────────────────────────────────────
+# Parameters are ORICA_final_new defaults; none are overridden in
+# receiver.py — ORICAProcessor is created with only n_components + srate.
+# ORICA_final_no_print_quick30.py:__init__, orica_processor.py:54–57
+orica_ff_profile: "cooling"     # forgetting factor schedule
+orica_block_size_white: 8       # samples per RLS whitening update
+orica_block_size_ica: 1         # samples per ICA weight update  ← differs from pyorica (8)
+orica_lambda_0: 0.995           # initial forgetting factor λ₀
+orica_gamma: 0.6                # cooling decay rate
+orica_num_subgaussian: 0        # ICs assumed sub-Gaussian (0 = all super-Gaussian)
+orica_tau_const: 3              # local stationarity window (samples)  ← differs from pyorica (.inf)
+
+# Maximum samples held in the ORICAProcessor data buffer before fitting.
+# orica_processor.py:ORICAProcessor.__init__ max_samples=10000
+orica_max_samples: 10000
+
+# ── ICLabel artifact classifier ─────────────────────────────────────
+# Threshold applied to all artifact classes (muscle, eye, heart, line
+# noise, channel noise); "brain" and "other" are never rejected.
+# receiver.py:114, run_two_instances_Driving.py:icalabel_threshold
+icalabel_threshold: 0.7    # probability threshold ∈ [0, 1]
+
+# ── LSL stream (broadcaster: aa_lsl_npz.py) ─────────────────────────
+lsl_stream_name: "mybrain"      # must match receiver stream_name
+lsl_chunk_size: 50              # samples pushed per chunk
+lsl_wait_time: 2                # seconds to wait after stream creation
+
+# ── LSL receiver runtime (receiver.py) ──────────────────────────────
+receiver_stream_name: "mybrain"
+receiver_lsl_timeout: 60        # seconds to wait for stream before giving up
+receiver_buffer_sec: 5          # visualization ring-buffer length (seconds)
+receiver_wait_after_empty: 5    # seconds to wait after empty data before saving
+
+# ── Reference experiment (Driving, s28_resampled) ───────────────────
+experiment_subject_id: "s28_resampled"
+experiment_file_tag: "bs2"
+experiment_output_dir: "output_data/xxSN_Driveasrpy20_2min_70"

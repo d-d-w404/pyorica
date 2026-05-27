@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Fig. 1 — Real-Time EEG Processing Pipeline</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 32px 16px 48px;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+  figure {
+    width: 680px;
+  }
+  figcaption {
+    margin-top: 14px;
+    font-size: 11px;
+    line-height: 1.55;
+    color: #111;
+    text-align: justify;
+  }
+  figcaption span.label {
+    font-weight: bold;
+  }
+  @media print {
+    body { padding: 0; }
+    figure { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<figure>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SVG: Real-Time Pipeline
+     Canvas: 680 × 806
+     Box:    w=420, h=62, x=130 (center=340)
+     Row y:  30, 127, 224, 321, 418, 515, 612
+     Gap:    35 px arrow between boxes
+════════════════════════════════════════════════════════════════════ -->
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="806"
+     viewBox="0 0 680 806" role="img"
+     aria-label="Real-time EEG processing pipeline block diagram">
+  <defs>
+    <!-- Arrow marker -->
+    <marker id="arr" markerWidth="9" markerHeight="7"
+            refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#374151"/>
+    </marker>
+    <!-- Light drop shadow for boxes -->
+    <filter id="shadow" x="-2%" y="-2%" width="106%" height="110%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#0002"/>
+    </filter>
+  </defs>
+
+  <!-- ── Row 1: Input ─────────────────────────────────────────────── -->
+  <rect x="130" y="30" width="420" height="62" rx="5"
+        fill="#1e3a5f" stroke="#122542" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="340" y="57" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#ffffff">EEG Data Source</text>
+  <text x="340" y="77" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#bfdbfe">LSL Inlet (online streaming) · ArrayStream (file replay)</text>
+
+  <!-- Arrow 1 + label -->
+  <line x1="340" y1="92" x2="340" y2="124"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="565" y="112" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" font-style="italic" fill="#6b7280">raw: C × S</text>
+  <line x1="555" y1="109" x2="506" y2="109"
+        stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="3,2"/>
+
+  <!-- ── Row 2: IIR ────────────────────────────────────────────────── -->
+  <rect x="130" y="127" width="420" height="62" rx="5"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="340" y="154" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#111827">IIR Bandpass Filter</text>
+  <text x="340" y="174" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#4b5563">Butterworth 1–50 Hz, order 4 · persistent filter state (z<tspan
+        baseline-shift="sub" font-size="9">i</tspan>) per channel</text>
+
+  <!-- Arrow 2 + label -->
+  <line x1="340" y1="189" x2="340" y2="221"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="565" y="209" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" font-style="italic" fill="#6b7280">filtered: C × S</text>
+  <line x1="555" y1="206" x2="506" y2="206"
+        stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="3,2"/>
+
+  <!-- ── Row 3: ASR ────────────────────────────────────────────────── -->
+  <rect x="130" y="224" width="420" height="62" rx="5"
+        fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="340" y="251" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#1e3a8a">Artifact Subspace Reconstruction (ASR)</text>
+  <text x="340" y="271" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#1e40af">asrpy backend · cutoff = 20 SD · stateful R, Z<tspan
+        baseline-shift="sub" font-size="9">i</tspan>, Σ across chunks</text>
+
+  <!-- Arrow 3 + label -->
+  <line x1="340" y1="286" x2="340" y2="318"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="565" y="306" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" font-style="italic" fill="#6b7280">cleaned: C × S</text>
+  <line x1="555" y1="303" x2="506" y2="303"
+        stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="3,2"/>
+
+  <!-- ── Row 4: ORICA ──────────────────────────────────────────────── -->
+  <rect x="130" y="321" width="420" height="62" rx="5"
+        fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="340" y="348" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#1e3a8a">Online Recursive ICA (ORICA)</text>
+  <text x="340" y="368" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#1e40af">Adaptive update of W, sphere · forgetting factor λ₀=0.995 (cooling)</text>
+
+  <!-- Arrow 4 + label -->
+  <line x1="340" y1="383" x2="340" y2="415"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="565" y="403" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" font-style="italic" fill="#6b7280">sources: K × S</text>
+  <line x1="555" y1="400" x2="506" y2="400"
+        stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="3,2"/>
+
+  <!-- ── Row 5: Classifier ─────────────────────────────────────────── -->
+  <rect x="130" y="418" width="420" height="62" rx="5"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="340" y="445" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#111827">ICLabel Classifier</text>
+  <text x="340" y="465" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#4b5563">Artifact IC detection · threshold p > 0.7 · classes: muscle, eye, heart, line noise</text>
+
+  <!-- Arrow 5 + label -->
+  <line x1="340" y1="480" x2="340" y2="512"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="565" y="500" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" font-style="italic" fill="#6b7280">mask: 𝟙[K]</text>
+  <line x1="555" y1="497" x2="506" y2="497"
+        stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="3,2"/>
+
+  <!-- ── Row 6: Reconstruction ─────────────────────────────────────── -->
+  <rect x="130" y="515" width="420" height="62" rx="5"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="340" y="542" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#111827">Signal Reconstruction</text>
+  <text x="340" y="562" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#4b5563">Zero artifact ICs in source space · back-project via pinv(W · sphere)</text>
+
+  <!-- Arrow 6 + label -->
+  <line x1="340" y1="577" x2="340" y2="609"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="565" y="597" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" font-style="italic" fill="#6b7280">cleaned: C × S</text>
+  <line x1="555" y1="594" x2="506" y2="594"
+        stroke="#9ca3af" stroke-width="0.8" stroke-dasharray="3,2"/>
+
+  <!-- ── Row 7: Output ─────────────────────────────────────────────── -->
+  <rect x="130" y="612" width="420" height="62" rx="5"
+        fill="#1e3a5f" stroke="#122542" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="340" y="639" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#ffffff">Cleaned EEG Output</text>
+  <text x="340" y="659" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#bfdbfe">Artifact-suppressed · sensor space preserved · shape C × S</text>
+
+  <!-- ── Left-side stage annotations ──────────────────────────────── -->
+  <!-- Brace / annotation for "Per-chunk (stateful)" -->
+  <line x1="125" y1="127" x2="110" y2="127" stroke="#9ca3af" stroke-width="0.8"/>
+  <line x1="110" y1="127" x2="110" y2="576" stroke="#9ca3af" stroke-width="0.8"/>
+  <line x1="110" y1="576" x2="125" y2="576" stroke="#9ca3af" stroke-width="0.8"/>
+  <line x1="110" y1="351" x2="95"  y2="351" stroke="#9ca3af" stroke-width="0.8"/>
+  <text x="90" y="355" text-anchor="middle" transform="rotate(-90,90,355)"
+        font-family="Arial,Helvetica,sans-serif" font-size="10"
+        fill="#6b7280">stateful · per-chunk</text>
+
+  <!-- ── Legend ────────────────────────────────────────────────────── -->
+  <rect x="130" y="700" width="14" height="14" rx="2"
+        fill="#1e3a5f" stroke="#122542" stroke-width="1"/>
+  <text x="150" y="712" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" fill="#374151">Data source / output</text>
+
+  <rect x="248" y="700" width="14" height="14" rx="2"
+        fill="#eff6ff" stroke="#3b82f6" stroke-width="1"/>
+  <text x="268" y="712" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" fill="#374151">Core algorithm stage</text>
+
+  <rect x="396" y="700" width="14" height="14" rx="2"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1"/>
+  <text x="416" y="712" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" fill="#374151">Support stage</text>
+
+  <!-- ── Notation key ───────────────────────────────────────────────── -->
+  <text x="130" y="740" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" fill="#6b7280" font-style="italic">
+    C = EEG channels, S = samples per chunk, K = independent components (K = C)
+  </text>
+
+</svg>
+
+<figcaption>
+  <span class="label">Fig. 1.</span>
+  Block diagram of the pyorica real-time EEG artifact removal pipeline. Each
+  incoming data chunk (shape <i>C</i>&thinsp;&times;&thinsp;<i>S</i>) passes
+  sequentially through an IIR bandpass filter (1–50&thinsp;Hz, Butterworth order 4),
+  Artifact Subspace Reconstruction (ASR; asrpy backend, cutoff = 20&thinsp;SD),
+  Online Recursive Independent Component Analysis (ORICA; cooling forgetting factor
+  &lambda;&#8320;&thinsp;=&thinsp;0.995), ICLabel-based artifact component classification
+  (threshold <i>p</i>&thinsp;&gt;&thinsp;0.7), and sensor-space reconstruction.
+  All stages maintain state across chunks, replicating the behavior of a live LSL
+  data stream. <i>C</i> = number of EEG channels; <i>S</i> = chunk size (samples);
+  <i>K</i> = number of independent components (<i>K</i>&thinsp;=&thinsp;<i>C</i>).
+</figcaption>
+
+</figure>
+</body>
+</html>

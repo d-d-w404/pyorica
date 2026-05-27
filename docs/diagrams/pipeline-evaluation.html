@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Fig. 2 — Offline Evaluation Framework</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 32px 16px 48px;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+  figure {
+    width: 820px;
+  }
+  figcaption {
+    margin-top: 14px;
+    font-size: 11px;
+    line-height: 1.55;
+    color: #111;
+    text-align: justify;
+  }
+  figcaption span.label { font-weight: bold; }
+  @media print {
+    body { padding: 0; }
+    figure { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<figure>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SVG: Evaluation Framework
+     Two panels stacked vertically:
+       (a) Per-subject processing chain  — single column, y 30–590
+       (b) Cross-session aggregation     — three-input merge, y 650–970
+
+     Canvas: 820 × 980
+     Box: w=440, h=60, center_x=350 (panel a)
+     Panel b uses three source boxes feeding one aggregation box
+════════════════════════════════════════════════════════════════════ -->
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="980"
+     viewBox="0 0 820 980" role="img"
+     aria-label="Offline EEG evaluation framework block diagram">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="7"
+            refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#374151"/>
+    </marker>
+    <filter id="shadow" x="-2%" y="-2%" width="106%" height="110%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#0002"/>
+    </filter>
+  </defs>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       PANEL (a): Per-subject processing chain
+       Box: x=130, w=440, h=60, center_x=350
+       Rows: 30, 120, 210, 300, 390, 480
+  ═══════════════════════════════════════════════════════════════ -->
+
+  <!-- Panel label -->
+  <text x="130" y="22" font-family="Arial,Helvetica,sans-serif"
+        font-size="12" font-weight="bold" fill="#374151">(a)</text>
+
+  <!-- Row 1: Session file -->
+  <rect x="130" y="30" width="440" height="60" rx="5"
+        fill="#1e3a5f" stroke="#122542" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="350" y="56" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#ffffff">Session File</text>
+  <text x="350" y="76" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#bfdbfe">EEGLAB .set / MNE .fif · C channels × N samples</text>
+
+  <!-- Arrow 1 -->
+  <line x1="350" y1="90" x2="350" y2="117"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Row 2: ArrayStream -->
+  <rect x="130" y="120" width="440" height="60" rx="5"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="350" y="146" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#111827">ArrayStream (Simulated Real-Time)</text>
+  <text x="350" y="166" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#4b5563">Replays session chunk-by-chunk · identical code path to live LSL stream</text>
+
+  <!-- Arrow 2 -->
+  <line x1="350" y1="180" x2="350" y2="207"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Row 3: EEGPipeline verbose -->
+  <rect x="130" y="210" width="440" height="60" rx="5"
+        fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="350" y="236" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#1e3a8a">EEGPipeline  (verbose = True)</text>
+  <text x="350" y="256" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#1e40af">IIR → ASR → ORICA → Classifier → Reconstruct · stores stage arrays per chunk</text>
+
+  <!-- Arrow 3 -->
+  <line x1="350" y1="270" x2="350" y2="297"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Row 4: RunResult stage arrays -->
+  <rect x="130" y="300" width="440" height="60" rx="5"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="350" y="326" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#111827">RunResult: Stage Arrays</text>
+  <text x="350" y="346" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#4b5563">raw · iir · asr · orica — each shape C × N, accumulated across chunks</text>
+
+  <!-- Arrow 4 -->
+  <line x1="350" y1="360" x2="350" y2="387"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Row 5: Offline ICA analysis -->
+  <rect x="130" y="390" width="440" height="60" rx="5"
+        fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="350" y="416" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#1e3a8a">Offline ICA Analysis</text>
+  <text x="350" y="436" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#1e40af">MNE extended Infomax fitted on IIR array · unmixing applied to IIR, ASR, ORICA</text>
+
+  <!-- Annotation box right of row 5 -->
+  <rect x="590" y="395" width="200" height="50" rx="4"
+        fill="#fefce8" stroke="#ca8a04" stroke-width="1"/>
+  <text x="690" y="416" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="10"
+        fill="#78350f">Independent of online</text>
+  <text x="690" y="430" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="10"
+        fill="#78350f">ORICA convergence state</text>
+  <line x1="570" y1="420" x2="590" y2="420"
+        stroke="#ca8a04" stroke-width="0.8" stroke-dasharray="3,2"/>
+
+  <!-- Arrow 5 -->
+  <line x1="350" y1="450" x2="350" y2="477"
+        stroke="#374151" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Row 6: Per-subject CSV -->
+  <rect x="130" y="480" width="440" height="60" rx="5"
+        fill="#1e3a5f" stroke="#122542" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="350" y="506" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#ffffff">Per-Subject IC Source Energy CSV</text>
+  <text x="350" y="526" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#bfdbfe">ic · label · ms_iir · ms_asr · ms_orica · pct_asr · pct_orica</text>
+
+  <!-- ── Left bracket annotation panel (a) -->
+  <line x1="125" y1="120" x2="112" y2="120" stroke="#9ca3af" stroke-width="0.8"/>
+  <line x1="112" y1="120" x2="112" y2="540" stroke="#9ca3af" stroke-width="0.8"/>
+  <line x1="112" y1="540" x2="125" y2="540" stroke="#9ca3af" stroke-width="0.8"/>
+  <line x1="112" y1="330" x2="100" y2="330" stroke="#9ca3af" stroke-width="0.8"/>
+  <text x="96" y="334" text-anchor="middle"
+        transform="rotate(-90,96,334)"
+        font-family="Arial,Helvetica,sans-serif" font-size="10"
+        fill="#6b7280">per session</text>
+
+  <!-- divider between panels -->
+  <line x1="60" y1="590" x2="760" y2="590"
+        stroke="#d1d5db" stroke-width="1" stroke-dasharray="6,4"/>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       PANEL (b): Cross-session aggregation
+       Three CSV boxes → merge → two output boxes
+  ═══════════════════════════════════════════════════════════════ -->
+
+  <!-- Panel label -->
+  <text x="60" y="620" font-family="Arial,Helvetica,sans-serif"
+        font-size="12" font-weight="bold" fill="#374151">(b)</text>
+
+  <!-- CSV boxes: s1, s2, ..., sN -->
+  <!-- Box s1: x=60, w=160, y=640 -->
+  <rect x="55" y="640" width="175" height="55" rx="5"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="142" y="663" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="12"
+        font-weight="bold" fill="#111827">s₁_ic_energy.csv</text>
+  <text x="142" y="681" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="10"
+        fill="#4b5563">K ICs × 7 metrics</text>
+
+  <!-- Box s2 -->
+  <rect x="320" y="640" width="175" height="55" rx="5"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="407" y="663" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="12"
+        font-weight="bold" fill="#111827">s₂_ic_energy.csv</text>
+  <text x="407" y="681" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="10"
+        fill="#4b5563">K ICs × 7 metrics</text>
+
+  <!-- Box sN -->
+  <rect x="588" y="640" width="175" height="55" rx="5"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="675" y="663" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="12"
+        font-weight="bold" fill="#111827">s<tspan font-style="italic">N</tspan>_ic_energy.csv</text>
+  <text x="675" y="681" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="10"
+        fill="#4b5563">K ICs × 7 metrics</text>
+
+  <!-- Ellipsis between s2 and sN -->
+  <text x="524" y="673" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="18"
+        fill="#9ca3af">…</text>
+
+  <!-- Convergence lines from three CSV boxes to aggregation box center (x=410) -->
+  <!-- From s1 bottom → bend right → top of aggregation -->
+  <polyline points="142,695 142,745 410,745 410,758"
+            fill="none" stroke="#374151" stroke-width="1.5"
+            marker-end="url(#arr)"/>
+  <!-- From s2 bottom straight down -->
+  <line x1="407" y1="695" x2="407" y2="745"
+        fill="none" stroke="#374151" stroke-width="1.5"/>
+  <!-- From sN bottom → bend left → join -->
+  <polyline points="675,695 675,745 410,745"
+            fill="none" stroke="#374151" stroke-width="1.5"/>
+
+  <!-- Aggregation box -->
+  <rect x="190" y="760" width="440" height="70" rx="5"
+        fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="410" y="788" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#1e3a8a">Cross-Session Aggregation</text>
+  <text x="410" y="808" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#1e40af">Within-subject: median per ICLabel class · Cross-subject: mean ± SD</text>
+  <text x="410" y="824" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#1e40af">7 fixed ICLabel classes (brain, muscle, eye, heart, line noise, channel noise, other)</text>
+
+  <!-- Two arrows from aggregation to outputs -->
+  <!-- Left: bar chart -->
+  <polyline points="300,830 300,870 250,870"
+            fill="none" stroke="#374151" stroke-width="1.5"
+            marker-end="url(#arr)"/>
+  <!-- Right: summary CSV -->
+  <polyline points="520,830 520,870 570,870"
+            fill="none" stroke="#374151" stroke-width="1.5"
+            marker-end="url(#arr)"/>
+
+  <!-- Output box left: figure -->
+  <rect x="55" y="870" width="385" height="62" rx="5"
+        fill="#1e3a5f" stroke="#122542" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="247" y="896" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="13"
+        font-weight="bold" fill="#ffffff">cross_session_results.png</text>
+  <text x="247" y="916" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#bfdbfe">Bar charts: ASR vs IIR · ORICA vs IIR · error bars = SD</text>
+
+  <!-- Output box right: CSV -->
+  <rect x="570" y="870" width="195" height="62" rx="5"
+        fill="#1e3a5f" stroke="#122542" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="667" y="896" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        font-weight="bold" fill="#ffffff">cross_session_summary.csv</text>
+  <text x="667" y="916" text-anchor="middle"
+        font-family="Arial,Helvetica,sans-serif" font-size="11"
+        fill="#bfdbfe">class · mean · SD · N</text>
+
+  <!-- ── Legend ── -->
+  <rect x="190" y="952" width="12" height="12" rx="2"
+        fill="#1e3a5f" stroke="#122542" stroke-width="1"/>
+  <text x="208" y="963" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" fill="#374151">Data source / output</text>
+
+  <rect x="330" y="952" width="12" height="12" rx="2"
+        fill="#eff6ff" stroke="#3b82f6" stroke-width="1"/>
+  <text x="348" y="963" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" fill="#374151">Core algorithm stage</text>
+
+  <rect x="470" y="952" width="12" height="12" rx="2"
+        fill="#f9fafb" stroke="#6b7280" stroke-width="1"/>
+  <text x="488" y="963" font-family="Arial,Helvetica,sans-serif"
+        font-size="10" fill="#374151">Data / support stage</text>
+
+</svg>
+
+<figcaption>
+  <span class="label">Fig. 2.</span>
+  Offline evaluation framework for benchmarking pyorica against multi-session EEG
+  datasets. <b>(a)</b> Per-subject processing chain. Each session file is replayed
+  chunk-by-chunk through the same stateful <code>EEGPipeline</code> used in live
+  streaming (<i>simulated real-time</i>), accumulating four stage arrays (raw, IIR,
+  ASR, ORICA) into a <code>RunResult</code>. A separate offline ICA decomposition
+  (MNE extended Infomax, fitted on the full IIR stage array) then projects all three
+  filtered stages through the same unmixing matrix to compute per-IC mean-square
+  energy and percentage reduction relative to the IIR baseline. This measurement is
+  independent of ORICA convergence state. <b>(b)</b> Cross-session aggregation.
+  Per-subject CSVs are combined by taking the median IC source energy across
+  components of the same ICLabel class within each subject, followed by cross-subject
+  mean&thinsp;&plusmn;&thinsp;SD. Results are reported across all seven ICLabel classes
+  regardless of class presence in individual subjects.
+  <i>K</i> = number of independent components; <i>N</i> = total samples in session;
+  SD = standard deviation across subjects.
+</figcaption>
+
+</figure>
+</body>
+</html>
