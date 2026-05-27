@@ -135,7 +135,7 @@ class ASRAdapter:
                 "meegkit is required for backend='meegkit'. "
                 "Install it with: pip install meegkit"
             ) from exc
-        asr = ASR(sfreq=float(self._sfreq))
+        asr = ASR(sfreq=float(self._sfreq), cutoff=float(self._cutoff))
         asr.fit(data)
         self._asr_inst = asr
 
