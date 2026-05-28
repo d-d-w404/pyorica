@@ -111,7 +111,7 @@ python benchmarks/aggregate_results.py --run-dir benchmarks/results/run_20260527
 
 | File | Description |
 |------|-------------|
-| `cross_session_results.png` | Two bar charts: ASR vs IIR (left) and ORICA vs IIR (right) |
+| `cross_session_results.png` | Grouped bar chart: ASR vs IIR and ORICA vs IIR bars side-by-side per IC class |
 | `cross_session_summary.csv` | Table: class, mean_pct_asr, sd_pct_asr, mean_pct_orica, sd_pct_orica, n_subjects |
 
 ---

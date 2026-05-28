@@ -2,7 +2,7 @@
 
 Reads all ``*_ic_source_energy.csv`` files in a run directory, computes
 within-subject median per ICLabel class, then cross-subject mean ± SD, and
-produces two bar charts (ASR vs IIR, ORICA vs IIR) across all 7 ICLabel classes.
+produces a single grouped bar chart with ASR and ORICA bars side-by-side per ICLabel class.
 
 Usage
 -----
@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 
-IC_LABELS = ["brain", "muscle", "eye", "heart", "line noise", "channel noise", "other"]
+IC_LABELS = ["brain", "muscle artifact", "eye blink", "heart beat", "line noise", "channel noise", "other"]
 
 
 def aggregate(run_dir: Path) -> list[dict]:
@@ -84,7 +84,7 @@ def aggregate(run_dir: Path) -> list[dict]:
 
 
 def plot_summary(summary: list[dict], out_path: Path) -> None:
-    """Save two side-by-side bar charts (ASR vs IIR, ORICA vs IIR)."""
+    """Save a single grouped bar chart with ASR and ORICA bars per ICLabel class."""
     import matplotlib.pyplot as plt
 
     labels = [r["class"] for r in summary]
@@ -94,21 +94,24 @@ def plot_summary(summary: list[dict], out_path: Path) -> None:
     sds_orica = np.array([r["sd_pct_orica"] for r in summary])
 
     x = np.arange(len(labels))
+    width = 0.35
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5), sharey=False)
+    fig, ax = plt.subplots(figsize=(11, 5))
 
-    for ax, means, sds, title in [
-        (ax1, means_asr, sds_asr, "ASR vs IIR"),
-        (ax2, means_orica, sds_orica, "ORICA vs IIR"),
-    ]:
-        bars = ax.bar(x, means, yerr=sds, capsize=4, color="steelblue", alpha=0.8,
-                      error_kw={"elinewidth": 1.5})
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels, rotation=30, ha="right")
-        ax.set_ylabel("% energy reduction vs IIR")
-        ax.set_title(title)
-        ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
-        ax.grid(axis="y", alpha=0.3)
+    ax.bar(x - width / 2, means_asr, width, yerr=sds_asr, capsize=4,
+           label="ASR vs IIR", color="steelblue", alpha=0.85,
+           error_kw={"elinewidth": 1.5})
+    ax.bar(x + width / 2, means_orica, width, yerr=sds_orica, capsize=4,
+           label="ORICA vs IIR", color="darkorange", alpha=0.85,
+           error_kw={"elinewidth": 1.5})
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=30, ha="right")
+    ax.set_ylabel("% energy reduction vs IIR")
+    ax.set_title("Cross-session artifact reduction: ASR vs ORICA")
+    ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
+    ax.legend()
+    ax.grid(axis="y", alpha=0.3)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
