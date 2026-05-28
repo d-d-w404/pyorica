@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 
-IC_LABELS = ["brain", "muscle", "eye", "heart", "line noise", "channel noise", "other"]
+IC_LABELS = ["brain", "muscle artifact", "eye blink", "heart beat", "line noise", "channel noise", "other"]
 
 
 def aggregate(run_dir: Path) -> list[dict]:

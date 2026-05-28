@@ -7,7 +7,7 @@ import pytest
 from pathlib import Path
 
 
-IC_LABELS = ["brain", "muscle", "eye", "heart", "line noise", "channel noise", "other"]
+IC_LABELS = ["brain", "muscle artifact", "eye blink", "heart beat", "line noise", "channel noise", "other"]
 
 FIELDNAMES = ["ic", "label", "ms_iir", "ms_asr", "ms_orica", "pct_asr", "pct_orica"]
 
@@ -74,18 +74,18 @@ def test_all_seven_classes_always_present(tmp_path):
 def test_within_subject_median_aggregation(tmp_path):
     from benchmarks.aggregate_results import aggregate
 
-    # Subject 1: two muscle ICs with pct_asr 10 and 30 → median = 20
+    # Subject 1: two muscle artifact ICs with pct_asr 10 and 30 → median = 20
     rows = [
-        {"ic": 0, "label": "muscle", "ms_iir": 1.0, "ms_asr": 0.9,
+        {"ic": 0, "label": "muscle artifact", "ms_iir": 1.0, "ms_asr": 0.9,
          "ms_orica": 0.8, "pct_asr": 10.0, "pct_orica": 20.0},
-        {"ic": 1, "label": "muscle", "ms_iir": 1.0, "ms_asr": 0.7,
+        {"ic": 1, "label": "muscle artifact", "ms_iir": 1.0, "ms_asr": 0.7,
          "ms_orica": 0.6, "pct_asr": 30.0, "pct_orica": 40.0},
     ]
     _write_csv(tmp_path / "s1_ic_source_energy.csv", rows)
 
     summary = aggregate(tmp_path)
 
-    muscle_row = next(r for r in summary if r["class"] == "muscle")
+    muscle_row = next(r for r in summary if r["class"] == "muscle artifact")
     assert math.isclose(muscle_row["mean_pct_asr"], 20.0, abs_tol=1e-6)
     assert math.isclose(muscle_row["mean_pct_orica"], 30.0, abs_tol=1e-6)
 
@@ -110,14 +110,14 @@ def test_cross_subject_sd_is_correct(tmp_path):
 def test_n_subjects_counts_only_subjects_with_class(tmp_path):
     from benchmarks.aggregate_results import aggregate
 
-    # Only s1 has eye ICs
+    # Only s1 has eye blink ICs
     _make_subject_csv(tmp_path / "s1_ic_source_energy.csv",
-                      {"brain": (10.0, 20.0), "eye": (5.0, 50.0)})
+                      {"brain": (10.0, 20.0), "eye blink": (5.0, 50.0)})
     _make_subject_csv(tmp_path / "s2_ic_source_energy.csv", {"brain": (20.0, 30.0)})
 
     summary = aggregate(tmp_path)
 
-    eye_row = next(r for r in summary if r["class"] == "eye")
+    eye_row = next(r for r in summary if r["class"] == "eye blink")
     assert eye_row["n_subjects"] == 1
 
     brain_row = next(r for r in summary if r["class"] == "brain")
