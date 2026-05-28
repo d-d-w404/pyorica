@@ -1,5 +1,7 @@
 """EEGPipeline: IIR → ASR → ORICA → classify → reconstruct."""
 
+import warnings
+
 import numpy as np
 
 from pyorica.filters.iir import IIRFilter
@@ -57,10 +59,13 @@ class EEGPipeline:
         try:
             self._asr.fit(filtered)
             self._asr_fitted = True
-        except Exception:
-            # ASR fitting can fail when calibration data doesn't have
-            # EEG-like statistics (e.g., synthetic Gaussian noise in tests)
-            pass
+        except Exception as exc:
+            warnings.warn(
+                f"ASR fitting failed — ASR stage will be bypassed (pct_asr will be 100%). "
+                f"Reason: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
         self.orica.fit(filtered)
 
