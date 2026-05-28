@@ -26,6 +26,8 @@ class PipelineConfig:
     orica_tau_const: float = float("inf")
     # ICLabel
     icalabel_threshold: float = 0.7
+    # Seconds between ICLabel runs in the online pipeline (0 = every chunk)
+    classify_interval_s: float = 30.0
 
     def to_yaml(self, path: Union[str, Path]) -> None:
         """Write an annotated, human-readable YAML file.
@@ -69,6 +71,7 @@ class PipelineConfig:
             "# ICs with artifact probability above this threshold are zeroed.",
             "# Artifact classes: muscle, eye, heart, line noise, channel noise.",
             f"icalabel_threshold: {self.icalabel_threshold}      # probability threshold ∈ [0, 1]",
+            f"classify_interval_s: {self.classify_interval_s}     # seconds between ICLabel runs (0 = every chunk)",
         ]
         Path(path).write_text("\n".join(lines) + "\n")
 

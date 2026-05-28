@@ -30,6 +30,7 @@ import csv
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 
@@ -78,7 +79,8 @@ def _make_mne_info(ch_names: list[str], sfreq: float):
     return info
 
 
-def run_subject(set_path: Path, config, out_dir: Path) -> Path:
+def run_subject(set_path: Path, config, out_dir: Path,
+                ica_cache_dir: Optional[Path] = None) -> Path:
     """Run the full pipeline for one subject and write outputs to out_dir.
 
     Parameters
@@ -126,6 +128,8 @@ def run_subject(set_path: Path, config, out_dir: Path) -> Path:
     rows = ic_source_energy(
         result.iir, result.asr, result.output,
         ch_names, sfreq,
+        cache_dir=ica_cache_dir,
+        subject=subject,
     )
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -157,9 +161,15 @@ def main() -> None:
         "--config", metavar="YAML",
         help="Path to a PipelineConfig YAML file. Defaults to reference experiment settings.",
     )
+    parser.add_argument(
+        "--ica-cache-dir", metavar="PATH",
+        help="Directory for cached ICA objects (.fif/.pkl) and labels (.json). "
+             "If a cache exists for a subject it is reused instead of re-fitting ICA.",
+    )
     args = parser.parse_args()
 
     config = PipelineConfig.from_yaml(args.config) if args.config else PipelineConfig()
+    ica_cache_dir = Path(args.ica_cache_dir) if args.ica_cache_dir else None
 
     data_root_env = os.environ.get("PYORICA_NCTU_DATA", "")
     if not data_root_env:
@@ -195,7 +205,7 @@ def main() -> None:
     errors = []
     for set_path in sessions:
         try:
-            run_subject(set_path, config, output_dir)
+            run_subject(set_path, config, output_dir, ica_cache_dir=ica_cache_dir)
         except Exception as exc:
             subject = set_path.parent.name
             print(f"[{subject}] ERROR: {exc}", file=sys.stderr)

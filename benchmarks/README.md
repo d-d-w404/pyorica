@@ -58,7 +58,8 @@ PipelineConfig().to_yaml("my_config.yaml")
 ```bash
 python benchmarks/run_all_subjects.py [--config my_config.yaml] \
                                       [--output-dir benchmarks/results] \
-                                      [--subjects s1 s3 s5]
+                                      [--subjects s1 s3 s5] \
+                                      [--ica-cache-dir benchmarks/ica_cache]
 ```
 
 **What it does:**
@@ -67,6 +68,22 @@ python benchmarks/run_all_subjects.py [--config my_config.yaml] \
 - Prints progress with elapsed time and estimated remaining time
 - **Resumable**: subjects with existing CSVs are skipped — safe to re-run after interruption
 - Writes all outputs to a timestamped directory: `{output-dir}/run_YYYYMMDD_HHMMSS/`
+
+**ICA caching (`--ica-cache-dir`):**
+
+Offline ICA fitting is the dominant per-subject cost (~10–20 min each). Use `--ica-cache-dir` to save fitted ICA objects the first time and reuse them in subsequent runs:
+
+```bash
+# First run: fits ICA for each subject, writes cache
+python benchmarks/run_all_subjects.py --config config.yaml \
+    --ica-cache-dir benchmarks/ica_cache
+
+# Subsequent runs with different pipeline parameters: ICA load is instant
+python benchmarks/run_all_subjects.py --config config_v2.yaml \
+    --ica-cache-dir benchmarks/ica_cache   # same cache dir, shared across runs
+```
+
+The cache is keyed by subject ID and `random_state` (default 42). If you run with a different seed, the cache is rejected with a clear error. The cache directory can be shared across multiple run directories.
 
 **Output directory layout:**
 
