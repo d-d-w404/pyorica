@@ -46,7 +46,10 @@ dev = [
     "ruff",
     "scipy>=1.10",   # for loadmat in integration tests
 ]
-full = ["pyorica[lsl,pipeline,eval]"]
+benchmarks = [
+    "psutil>=5.9",
+]
+full = ["pyorica[lsl,pipeline,eval,benchmarks]"]
 
 [project.urls]
 Homepage = "https://github.com/goodshawn12/pyorica"

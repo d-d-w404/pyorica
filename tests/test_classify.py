@@ -105,3 +105,19 @@ def test_iclabel_integration_returns_valid_mask():
     mask = clf(sources, A, SFREQ)
     assert mask.dtype == bool
     assert mask.shape == (N_CH,)
+
+
+# ── Cycle 7 (regression #18): short chunk must not crash ─────────────────
+
+def test_short_chunk_returns_no_artifacts_without_error():
+    """Chunks shorter than the ICLabel FIR filter (~825 taps) must not crash.
+
+    Regression test for the last-chunk shape mismatch seen on s3 and s5.
+    """
+    clf = ICLabelClassifier(_make_info())
+    sources = RNG.standard_normal((N_CH, 40))  # well below the 825-sample minimum
+    A = np.eye(N_CH)
+    mask = clf(sources, A, SFREQ)             # must not raise
+    assert mask.dtype == bool
+    assert mask.shape == (N_CH,)
+    assert not mask.any()                      # short chunk → treat as clean

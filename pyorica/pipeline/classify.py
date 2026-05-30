@@ -57,6 +57,11 @@ class ICLabelClassifier:
         mask : ndarray of bool, shape (n_components,)
             True where a component is classified as an artifact.
         """
+        # ICLabel's FIR filter needs ~3.5 × sfreq samples (825 at 250 Hz, 845 at
+        # 256 Hz). Short final chunks cannot be classified — treat as artifact-free.
+        if sources.shape[1] < int(sfreq * 3.5):
+            return np.zeros(sources.shape[0], dtype=bool)
+
         proba = self._get_probabilities(sources, mixing_matrix, sfreq)
         argmax_idx = np.argmax(proba, axis=1)
         pred_labels = [LABEL_NAMES[i] for i in argmax_idx]

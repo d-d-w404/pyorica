@@ -66,7 +66,7 @@ def test_pass_all_classifier_output_equals_orica_reconstruction():
 def test_zero_all_classifier_output_is_near_zero():
     """Zeroing every IC → reconstructed signal should be near zero."""
     zero_all = lambda sources, W, sfreq: np.ones(sources.shape[0], dtype=bool)
-    p = _make_pipeline(classifier=zero_all)
+    p = _make_pipeline(classifier=zero_all, classify_interval_s=0)  # per-chunk mode
 
     calibration = RNG.standard_normal((N_CH, int(SFREQ * 5)))
     p.fit(calibration)
@@ -120,14 +120,13 @@ def test_verbose_false_stores_no_stage_attrs():
 
 def test_transient_artifact_is_attenuated():
     """Zeroing the highest-variance IC reduces RMS when a large artifact is present."""
-    # classifier that zeros the single highest-variance component
     def zero_max_var(sources, W, sfreq):
         mask = np.zeros(sources.shape[0], dtype=bool)
         mask[np.argmax(np.var(sources, axis=1))] = True
         return mask
 
     calibration = RNG.standard_normal((N_CH, int(SFREQ * 10)))
-    p = _make_pipeline(classifier=zero_max_var)
+    p = _make_pipeline(classifier=zero_max_var, classify_interval_s=0)  # per-chunk mode
     p.fit(calibration)
 
     # inject a large-amplitude transient; it should dominate one IC

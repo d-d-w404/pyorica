@@ -35,8 +35,10 @@ import argparse
 import os
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 
 def _find_sessions(root: Path) -> list[Path]:
@@ -52,9 +54,61 @@ def _format_seconds(s: float) -> str:
     return f"{m}m{sec:02d}s"
 
 
+def _auto_worker_count(sessions: list[Path]) -> tuple[int, dict]:
+    """Compute a safe worker count from available CPU and RAM.
+
+    Returns (n_workers, info_dict) where info_dict contains the values used.
+    Per-worker RAM is estimated as 4× the largest .set file on disk (conservative
+    multiplier for raw float64 data + pipeline state buffers).
+    """
+    import psutil
+
+    logical_cpus = os.cpu_count() or 1
+    available_ram_gb = psutil.virtual_memory().available / 1e9
+
+    # Conservative RAM estimate per worker: largest file × 4 (float64 + buffers)
+    max_file_bytes = max((p.stat().st_size for p in sessions), default=1)
+    per_worker_ram_gb = max(0.5, max_file_bytes * 4 / 1e9)
+
+    cpu_workers = max(1, logical_cpus - 2)
+    ram_workers = max(1, int(available_ram_gb * 0.8 / per_worker_ram_gb))
+    n_workers = min(cpu_workers, ram_workers, len(sessions))
+
+    info = {
+        "logical_cpus": logical_cpus,
+        "available_ram_gb": round(available_ram_gb, 1),
+        "per_worker_ram_gb": round(per_worker_ram_gb, 2),
+        "cpu_workers": cpu_workers,
+        "ram_workers": ram_workers,
+    }
+    return n_workers, info
+
+
+def _print_worker_banner(n_workers: int, info: dict, override: bool) -> None:
+    print("── Worker auto-detection ─────────────────────────────────────────────")
+    print(f"  Logical CPUs       : {info['logical_cpus']}")
+    print(f"  Available RAM      : {info['available_ram_gb']:.1f} GB")
+    print(f"  Est. RAM/worker    : {info['per_worker_ram_gb']:.2f} GB")
+    print(f"  CPU-limited workers: {info['cpu_workers']}  "
+          f"(logical_cpus - 2)")
+    print(f"  RAM-limited workers: {info['ram_workers']}  "
+          f"(80% RAM / est. per-worker)")
+    if override:
+        print(f"  Workers            : {n_workers}  (--workers override)")
+    else:
+        print(f"  Workers            : {n_workers}  (min of cpu/ram limits)")
+    print("──────────────────────────────────────────────────────────────────────")
+
+
+# Module-level wrapper required for ProcessPoolExecutor (lambdas/nested fns aren't picklable)
+def _run_subject_safe(set_path: Path, config, run_dir: Path,
+                      ica_cache_dir: Optional[Path]) -> None:
+    from benchmarks.run_validation import run_subject
+    run_subject(set_path, config, run_dir, ica_cache_dir=ica_cache_dir)
+
+
 def main() -> None:
     from pyorica.config import PipelineConfig
-    from benchmarks.run_validation import run_subject
 
     parser = argparse.ArgumentParser(
         description="Batch pyorica benchmark — all subjects in PYORICA_NCTU_DATA.",
@@ -79,7 +133,17 @@ def main() -> None:
         "--subjects", nargs="*", metavar="SID",
         help="Limit to specific subject IDs (e.g. s1 s3). Default: all.",
     )
+    parser.add_argument(
+        "--ica-cache-dir", metavar="PATH",
+        help="Directory for cached ICA objects and labels. Shared across runs so "
+             "different pipeline parameter sweeps reuse the same fitted ICA.",
+    )
+    parser.add_argument(
+        "--workers", type=int, default=None, metavar="N",
+        help="Number of parallel worker processes. Default: auto-detected from CPU/RAM.",
+    )
     args = parser.parse_args()
+    ica_cache_dir = Path(args.ica_cache_dir) if args.ica_cache_dir else None
 
     if args.generate_config:
         out = Path(args.generate_config)
@@ -123,10 +187,23 @@ def main() -> None:
     else:
         sessions = all_sessions
 
+    # Worker count
+    try:
+        auto_n, worker_info = _auto_worker_count(sessions)
+    except ImportError:
+        auto_n, worker_info = 1, {
+            "logical_cpus": os.cpu_count() or 1,
+            "available_ram_gb": 0.0,
+            "per_worker_ram_gb": 0.0,
+            "cpu_workers": 1,
+            "ram_workers": 1,
+        }
+    n_workers = args.workers if args.workers is not None else auto_n
+    _print_worker_banner(n_workers, worker_info, override=args.workers is not None)
+
     run_tag = datetime.now().strftime("run_%Y%m%d_%H%M%S")
     run_dir = Path(args.output_dir) / run_tag
     run_dir.mkdir(parents=True, exist_ok=True)
-
     config.to_yaml(run_dir / "config.yaml")
 
     total = len(sessions)
@@ -135,37 +212,36 @@ def main() -> None:
     skipped: list[str] = []
     batch_start = time.monotonic()
 
-    print(f"pyorica batch benchmark — {total} subject(s)")
+    print(f"\npyorica batch benchmark — {total} subject(s)")
     print(f"ASR backend : {config.asr_backend}  cutoff={config.asr_cutoff}")
     print(f"ICLabel thr : {config.icalabel_threshold}")
     print(f"Output dir  : {run_dir.resolve()}\n")
 
-    for idx, set_path in enumerate(sessions, start=1):
-        subject = set_path.parent.name
-        out_csv = run_dir / f"{subject}_ic_source_energy.csv"
+    # Separate already-complete subjects before touching the pool
+    todo = [p for p in sessions
+            if not (run_dir / f"{p.parent.name}_ic_source_energy.csv").exists()]
+    for p in sessions:
+        if p not in set(todo):
+            skipped.append(p.parent.name)
+            print(f"  → {p.parent.name} skipped (output already exists)")
 
-        elapsed = time.monotonic() - batch_start
-        if idx > 1 and succeeded:
-            avg_per_subject = elapsed / (len(succeeded) + len(failed))
-            remaining_est = avg_per_subject * (total - idx + 1)
-            time_info = (f"elapsed {_format_seconds(elapsed)}, "
-                         f"est. remaining {_format_seconds(remaining_est)}")
-        else:
-            time_info = f"elapsed {_format_seconds(elapsed)}"
-
-        print(f"[{idx}/{total}] {subject}  ({time_info})")
-
-        if out_csv.exists():
-            print(f"  → skipped (output already exists)")
-            skipped.append(subject)
-            continue
-
-        try:
-            run_subject(set_path, config, run_dir)
-            succeeded.append(subject)
-        except Exception as exc:
-            print(f"  → ERROR: {exc}", file=sys.stderr)
-            failed.append((subject, str(exc)))
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = {
+            pool.submit(_run_subject_safe, p, config, run_dir, ica_cache_dir): p
+            for p in todo
+        }
+        for fut in as_completed(futures):
+            path = futures[fut]
+            subject = path.parent.name
+            elapsed = time.monotonic() - batch_start
+            try:
+                fut.result()
+                succeeded.append(subject)
+                print(f"  ✓ {subject}  (elapsed {_format_seconds(elapsed)})")
+            except Exception as exc:
+                failed.append((subject, str(exc)))
+                print(f"  ✗ {subject}: {exc}  (elapsed {_format_seconds(elapsed)})",
+                      file=sys.stderr)
 
     total_elapsed = time.monotonic() - batch_start
 

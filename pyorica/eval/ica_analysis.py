@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import List, Optional, Sequence
 
 import numpy as np
@@ -49,6 +51,54 @@ def _make_raw(data: np.ndarray, ch_names: Sequence[str], sfreq: float):
     return raw
 
 
+def _save_ica_cache(ica, labels: List[str], random_state: int,
+                    fif_path: Path, json_path: Path) -> None:
+    """Persist ICA object and labels JSON to disk.
+
+    Tries MNE's .fif format first. If save() does not actually create the file
+    (e.g. for stub objects in tests), falls back to writing a .pkl alongside it.
+    """
+    import pickle
+
+    try:
+        ica.save(str(fif_path), overwrite=True)
+    except Exception:
+        pass  # will use pickle below if file not created
+
+    if not fif_path.exists():
+        pkl_path = fif_path.with_suffix(".pkl")
+        with open(pkl_path, "wb") as f:
+            pickle.dump(ica, f)
+
+    json_path.write_text(json.dumps({"labels": labels, "random_state": random_state}))
+
+
+def _load_ica_cache(fif_path: Path, json_path: Path, random_state: int):
+    """Load cached ICA and labels; raises ValueError on seed mismatch."""
+    import pickle
+    from mne.preprocessing import read_ica
+
+    meta = json.loads(json_path.read_text())
+    if meta["random_state"] != random_state:
+        raise ValueError(
+            f"Cache random_state={meta['random_state']} does not match "
+            f"requested random_state={random_state}. Delete the cache or "
+            f"pass the same seed."
+        )
+    pkl_path = fif_path.with_suffix(".pkl")
+    if fif_path.exists():
+        try:
+            ica = read_ica(str(fif_path))
+        except Exception:
+            # .fif may have been written by a stub; try pickle interpretation
+            with open(fif_path, "rb") as f:
+                ica = pickle.load(f)
+    else:
+        with open(pkl_path, "rb") as f:
+            ica = pickle.load(f)
+    return ica, meta["labels"]
+
+
 def _project_sources(ica, data: np.ndarray) -> np.ndarray:
     """Project (channels × samples) data through the ICA unmixing matrix.
 
@@ -78,6 +128,8 @@ def ic_source_energy(
     *,
     random_state: int = 42,
     max_iter: int = 500,
+    cache_dir: Optional[Path] = None,
+    subject: Optional[str] = None,
 ) -> List[dict]:
     """Compute per-IC source mean-square energy across pipeline stages.
 
@@ -109,8 +161,24 @@ def ic_source_energy(
         ``pct_asr``, ``pct_orica``
     """
     raw_iir = _make_raw(iir, ch_names, sfreq)
-    ica = _fit_ica(raw_iir, random_state=random_state, max_iter=max_iter)
-    labels = _label_ica(raw_iir, ica)
+
+    use_cache = cache_dir is not None and subject is not None
+    if use_cache:
+        cache_dir = Path(cache_dir)
+        fif_path = cache_dir / f"{subject}_ica.fif"
+        json_path = cache_dir / f"{subject}_ica_labels.json"
+
+    pkl_path = fif_path.with_suffix(".pkl") if use_cache else None
+    cache_hit = (use_cache and json_path.exists()
+                 and (fif_path.exists() or pkl_path.exists()))
+    if cache_hit:
+        ica, labels = _load_ica_cache(fif_path, json_path, random_state)
+    else:
+        ica = _fit_ica(raw_iir, random_state=random_state, max_iter=max_iter)
+        labels = _label_ica(raw_iir, ica)
+        if use_cache:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            _save_ica_cache(ica, labels, random_state, fif_path, json_path)
 
     src_iir = _project_sources(ica, iir)
     src_asr = _project_sources(ica, asr)
