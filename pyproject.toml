@@ -34,6 +34,7 @@ pipeline = [
     "meegkit>=0.1.7",
     "mne>=1.6",
     "pyyaml>=6.0",
+    "threadpoolctl>=3.1",
 ]
 eval = [
     "mne>=1.6",
@@ -62,6 +63,9 @@ markers = ["slow: marks tests that require full dataset runs (deselect with -m '
 filterwarnings = [
     # meegkit internal NumPy scalar-from-array deprecation — upstream issue, not ours
     "ignore::DeprecationWarning:meegkit",
+    # asrpy internal NumPy scalar-from-array deprecation and divide-by-zero on zero input
+    "ignore::DeprecationWarning:asrpy",
+    "ignore::RuntimeWarning:asrpy",
 ]
 
 [tool.hatch.build.targets.sdist]

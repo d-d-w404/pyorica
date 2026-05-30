@@ -76,7 +76,13 @@ class ASRAdapter:
                 "asrpy is required for backend='asrpy'. "
                 "Install it with: pip install asrpy"
             ) from exc
-        import mne
+        try:
+            import mne
+        except ImportError as exc:
+            raise ImportError(
+                "mne is required for backend='asrpy'. "
+                "Install it with: pip install pyorica[pipeline]"
+            ) from exc
         n_ch = data.shape[0]
         ch_names = [f"EEG{i:03d}" for i in range(n_ch)]
         info = mne.create_info(ch_names, sfreq=float(self._sfreq),
