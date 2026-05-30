@@ -76,8 +76,20 @@ class ASRAdapter:
                 "asrpy is required for backend='asrpy'. "
                 "Install it with: pip install asrpy"
             ) from exc
+        try:
+            import mne
+        except ImportError as exc:
+            raise ImportError(
+                "mne is required for backend='asrpy'. "
+                "Install it with: pip install pyorica[pipeline]"
+            ) from exc
+        n_ch = data.shape[0]
+        ch_names = [f"EEG{i:03d}" for i in range(n_ch)]
+        info = mne.create_info(ch_names, sfreq=float(self._sfreq),
+                               ch_types="eeg", verbose=False)
+        raw = mne.io.RawArray(data, info, verbose=False)
         asr = asrpy.ASR(sfreq=float(self._sfreq), cutoff=float(self._cutoff))
-        asr.fit(data)
+        asr.fit(raw)
         self._asr_inst = asr
         # reset stateful transform accumulators
         self._asr_R = None
@@ -96,24 +108,41 @@ class ASRAdapter:
         x = np.asarray(chunk, dtype=np.float64)
         # pad end with zeros so the lookahead window is always filled
         X_in = np.concatenate([x, np.zeros((n_ch, ls), dtype=np.float64)], axis=1)
-        out, st = asr_process(
-            X_in,
-            self._sfreq,
-            asr.M,
-            asr.T,
-            asr.win_len,
-            float(lookahead),
-            int(stepsize),
-            float(maxdims),
-            (asr.A, asr.B),
-            self._asr_R,
-            self._asr_Zi,
-            self._asr_cov,
-            None,
-            True,
-            asr.method,
-            int(mem_splits),
-        )
+
+        # asr_process calls np.linalg.eigh in a tight inner loop over small
+        # (n_channels x n_channels) matrices.  OpenBLAS thread-launch overhead
+        # dominates for such tiny matrices, turning a ~0.04 ms op into ~2 s.
+        # Pinning BLAS to one thread here reduces the full run from ~27 h to
+        # ~15 min without affecting global state outside this call.
+        try:
+            from threadpoolctl import threadpool_limits
+            _ctx = threadpool_limits(limits=1, user_api="blas")
+            _ctx.__enter__()
+        except ImportError:
+            _ctx = None
+
+        try:
+            out, st = asr_process(
+                X_in,
+                self._sfreq,
+                asr.M,
+                asr.T,
+                asr.win_len,
+                float(lookahead),
+                int(stepsize),
+                float(maxdims),
+                (asr.A, asr.B),
+                self._asr_R,
+                self._asr_Zi,
+                self._asr_cov,
+                None,
+                True,
+                asr.method,
+                int(mem_splits),
+            )
+        finally:
+            if _ctx is not None:
+                _ctx.__exit__(None, None, None)
         self._asr_R = st["R"]
         self._asr_Zi = st["Zi"]
         self._asr_cov = st["cov"]
