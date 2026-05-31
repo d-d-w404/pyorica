@@ -1,5 +1,6 @@
 """EEGPipeline: IIR → ASR → ORICA → classify → reconstruct."""
 
+import time
 import warnings
 
 import numpy as np
@@ -50,15 +51,32 @@ class EEGPipeline:
         self._samples_since_classify = 0
         self._cached_mask: np.ndarray | None = None  # None = no mask computed yet
 
-    def fit(self, calibration_data):
-        """Calibrate ASR and warm-start ORICA on calibration data."""
+    def fit(self, calibration_data, label=None):
+        """Calibrate ASR and warm-start ORICA on calibration data.
+
+        Pipeline: IIR filter all calib data → ASR fit → ASR clean → ORICA warm-start.
+        ORICA sees ASR-cleaned data so its initial weights reflect artifact-free signals.
+        """
+        def _step(name):
+            now = time.monotonic()
+            elapsed = now - _step.t0
+            if label is not None:
+                print(f"[{label}]   calib step: {name}  ({elapsed:.1f}s)", flush=True)
+            _step.t0 = now
+        _step.t0 = time.monotonic()
+
         iir_calib = IIRFilter(self._n_channels, self._sfreq,
                               l_freq=self._iir.l_freq, h_freq=self._iir.h_freq)
-        filtered = iir_calib.process(calibration_data)
+        iir_filtered = iir_calib.process(calibration_data)
+        _step("IIR done")
 
+        orica_input = iir_filtered
         try:
-            self._asr.fit(filtered)
+            self._asr.fit(iir_filtered)
             self._asr_fitted = True
+            _step("ASR.fit done")
+            orica_input = self._asr.transform(iir_filtered)
+            _step("ASR.transform done")
         except Exception as exc:
             warnings.warn(
                 f"ASR fitting failed — ASR stage will be bypassed (pct_asr will be 100%). "
@@ -67,7 +85,18 @@ class EEGPipeline:
                 stacklevel=2,
             )
 
-        self.orica.fit(filtered)
+        try:
+            from threadpoolctl import threadpool_limits
+            _orica_ctx = threadpool_limits(limits=1, user_api="blas")
+            _orica_ctx.__enter__()
+        except ImportError:
+            _orica_ctx = None
+        try:
+            self.orica.fit(orica_input)
+        finally:
+            if _orica_ctx is not None:
+                _orica_ctx.__exit__(None, None, None)
+        _step("ORICA.fit done")
 
     def process(self, chunk):
         """Run IIR → ASR → ORICA → classify → reconstruct on a chunk."""

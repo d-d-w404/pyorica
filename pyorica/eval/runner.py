@@ -1,11 +1,21 @@
 """Simulated real-time pipeline runner."""
 
+import math
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
 
 from pyorica.streaming.array import ArrayStream
+
+
+def _fmt_seconds(s: float) -> str:
+    s = int(s)
+    if s < 60:
+        return f"{s}s"
+    m, sec = divmod(s, 60)
+    return f"{m}m{sec:02d}s"
 
 
 @dataclass
@@ -42,7 +52,8 @@ class RunResult:
     asr: Optional[np.ndarray] = None
 
 
-def run(pipeline, data, chunk_size=64, calibration_data=None, verbose=False):
+def run(pipeline, data, chunk_size=64, calibration_data=None, verbose=False,
+        label: Optional[str] = None, progress_interval: float = 30.0):
     """Run a pipeline over data in simulated real-time.
 
     Parameters
@@ -57,15 +68,27 @@ def run(pipeline, data, chunk_size=64, calibration_data=None, verbose=False):
         If provided, ``pipeline.fit()`` is called before processing.
     verbose : bool
         If True, accumulate stage arrays (raw, iir, asr) in the result.
+    label : str, optional
+        Prefix for progress messages (e.g. subject ID). No progress printed if None.
+    progress_interval : float
+        Seconds between progress prints (default 30). Ignored when label is None.
 
     Returns
     -------
     RunResult
     """
+    t_start = time.monotonic()
+
     if calibration_data is not None:
-        pipeline.fit(calibration_data)
+        if label is not None:
+            print(f"[{label}] calibrating (ASR fit + ORICA warm-start)...", flush=True)
+        pipeline.fit(calibration_data, label=label)
+        if label is not None:
+            print(f"[{label}] calibration done  ({_fmt_seconds(time.monotonic() - t_start)})",
+                  flush=True)
 
     n_channels, n_samples = data.shape
+    n_chunks = math.ceil(n_samples / chunk_size)
     stream = ArrayStream(data, chunk_size=chunk_size)
 
     chunks_out = []
@@ -79,6 +102,9 @@ def run(pipeline, data, chunk_size=64, calibration_data=None, verbose=False):
     if verbose:
         pipeline._verbose = True
 
+    chunk_idx = 0
+    t_last_progress = time.monotonic()
+
     for chunk in stream:
         rms_in_list.append(float(np.sqrt(np.mean(chunk ** 2))))
         cleaned = pipeline.process(chunk)
@@ -89,6 +115,21 @@ def run(pipeline, data, chunk_size=64, calibration_data=None, verbose=False):
             raw_chunks.append(pipeline._last_raw)
             iir_chunks.append(pipeline._last_iir)
             asr_chunks.append(pipeline._last_asr)
+
+        chunk_idx += 1
+        if label is not None:
+            now = time.monotonic()
+            if now - t_last_progress >= progress_interval:
+                elapsed = now - t_start
+                pct = chunk_idx / n_chunks * 100
+                rate = chunk_idx / elapsed if elapsed > 0 else 0
+                remaining = (n_chunks - chunk_idx) / rate if rate > 0 else 0
+                print(f"[{label}] pipeline: {pct:.0f}%  "
+                      f"({chunk_idx}/{n_chunks} chunks, "
+                      f"elapsed {_fmt_seconds(elapsed)}, "
+                      f"ETA {_fmt_seconds(remaining)})",
+                      flush=True)
+                t_last_progress = now
 
     output = np.concatenate(chunks_out, axis=1)
 
