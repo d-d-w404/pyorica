@@ -94,6 +94,43 @@ print(summarize(result))
 # {'mean_rms_reduction_db': 4.3, 'mean_rms_input': 0.82, ...}
 ```
 
+### Running the NCTU-LKT benchmark
+
+The `benchmarks/` scripts reproduce the cross-subject IC source energy evaluation against the [NCTU-LKT dataset](https://doi.org/10.1038/s41597-022-01647-1).
+
+**Prerequisites:** `pip install pyorica[eval]` and the NCTU-LKT dataset downloaded locally.
+
+```bash
+# 1. Point to the dataset root
+export PYORICA_NCTU_DATA=/path/to/dataset_2019_TBME
+
+# 2. Generate an annotated config file and review it
+python benchmarks/run_all_subjects.py --generate-config config.yaml
+
+# 3. Run all subjects in parallel (worker count auto-detected from CPU/RAM)
+python benchmarks/run_all_subjects.py --config config.yaml
+
+# 4. Aggregate results into a bar chart and summary CSV
+python benchmarks/aggregate_results.py --run-dir benchmarks/results/run_YYYYMMDD_HHMMSS
+```
+
+Output lands in `benchmarks/results/run_YYYYMMDD_HHMMSS/`:
+
+| File | Contents |
+|---|---|
+| `config.yaml` | Exact parameters used |
+| `s{N}_ic_source_energy.csv` | Per-IC energy reduction per subject |
+| `cross_session_results.png` | Grouped bar chart: ASR vs ORICA per ICLabel class |
+| `cross_session_summary.csv` | Cross-subject mean ± SD table |
+
+To run a single subject or subset:
+
+```bash
+python benchmarks/run_all_subjects.py --config config.yaml --subjects s1 s3
+# or with an ICA cache to skip re-fitting across parameter sweeps:
+python benchmarks/run_all_subjects.py --config config.yaml --ica-cache-dir benchmarks/ica_cache
+```
+
 ## Project layout
 
 ```

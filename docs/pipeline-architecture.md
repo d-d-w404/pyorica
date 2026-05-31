@@ -70,6 +70,39 @@ flowchart LR
 
 ---
 
+## Running the benchmark
+
+The `benchmarks/` scripts replay sessions from the [NCTU-LKT dataset](https://doi.org/10.1038/s41597-022-01647-1) through the evaluation framework and produce cross-subject IC source energy reduction plots.
+
+**Quick start**
+
+```bash
+# Prerequisites: pip install pyorica[eval]
+export PYORICA_NCTU_DATA=/path/to/dataset_2019_TBME
+
+# Generate and review config
+python benchmarks/run_all_subjects.py --generate-config config.yaml
+
+# Run all subjects (parallel workers auto-detected from CPU/RAM)
+python benchmarks/run_all_subjects.py --config config.yaml
+
+# Aggregate into plot + summary CSV
+python benchmarks/aggregate_results.py --run-dir benchmarks/results/run_YYYYMMDD_HHMMSS
+```
+
+**Useful flags**
+
+| Flag | Description |
+|------|-------------|
+| `--subjects s1 s3` | Run only specific subjects |
+| `--workers N` | Override auto-detected worker count |
+| `--ica-cache-dir PATH` | Cache fitted ICA objects — reused across parameter sweeps |
+| `--output-dir PATH` | Override default `benchmarks/results` parent directory |
+
+The benchmark is **resumable**: subjects with an existing output CSV in the run directory are skipped automatically. Re-run the same command to pick up after an interruption.
+
+---
+
 ## Correspondence to original ORICA pipeline
 
 | Aspect | Original ORICA (`receiver.py`) | pyorica |
