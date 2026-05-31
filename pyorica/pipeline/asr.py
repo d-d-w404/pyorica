@@ -89,7 +89,17 @@ class ASRAdapter:
                                ch_types="eeg", verbose=False)
         raw = mne.io.RawArray(data, info, verbose=False)
         asr = asrpy.ASR(sfreq=float(self._sfreq), cutoff=float(self._cutoff))
-        asr.fit(raw)
+        try:
+            from threadpoolctl import threadpool_limits
+            _ctx = threadpool_limits(limits=1, user_api="blas")
+            _ctx.__enter__()
+        except ImportError:
+            _ctx = None
+        try:
+            asr.fit(raw)
+        finally:
+            if _ctx is not None:
+                _ctx.__exit__(None, None, None)
         self._asr_inst = asr
         # reset stateful transform accumulators
         self._asr_R = None

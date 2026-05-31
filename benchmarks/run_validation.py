@@ -29,10 +29,19 @@ import argparse
 import csv
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
+
+
+def _fmt_seconds(s: float) -> str:
+    s = int(s)
+    if s < 60:
+        return f"{s}s"
+    m, sec = divmod(s, 60)
+    return f"{m}m{sec:02d}s"
 
 # ICLabel's MNE FIR filter (length ~825 at 250 Hz) needs > 825 samples per chunk.
 # 1000 samples = 4 s at 250 Hz gives comfortable headroom.
@@ -121,16 +130,22 @@ def run_subject(set_path: Path, config, out_dir: Path,
     print(f"[{subject}] running pipeline (ASR={config.asr_backend}, "
           f"cutoff={config.asr_cutoff}, ICLabel threshold={config.icalabel_threshold}, "
           f"chunk={CHUNK_SIZE} samples)...")
+    t0 = time.monotonic()
     result = run(pipeline, data, chunk_size=CHUNK_SIZE,
-                 calibration_data=calibration, verbose=True)
+                 calibration_data=calibration, verbose=True,
+                 label=subject)
+    print(f"[{subject}] pipeline done  ({_fmt_seconds(time.monotonic() - t0)})")
 
     print(f"[{subject}] running offline ICA analysis...")
+    t0 = time.monotonic()
     rows = ic_source_energy(
         result.iir, result.asr, result.output,
         ch_names, sfreq,
         cache_dir=ica_cache_dir,
         subject=subject,
     )
+
+    print(f"[{subject}] ICA analysis done  ({_fmt_seconds(time.monotonic() - t0)})")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{subject}_ic_source_energy.csv"

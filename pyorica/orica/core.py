@@ -216,12 +216,27 @@ class ORICAFilter:
         # apply current sphere to get mixtures
         mixtures = self._sphere @ data_c
 
-        for bi in range(n_blocks):
-            start = bi * block_size
-            end = min(n_pts, (bi + 1) * block_size)
-            data_range = np.arange(start, end) + 1  # 1-indexed, matches MATLAB
-            block = data_c[:, start:end]
+        # All ORICA matrix ops are on tiny (n_channels × n_channels) matrices.
+        # Pin BLAS to 1 thread for the duration of this loop — identical fix as
+        # asr_process; prevents OpenBLAS thread-dispatch overhead (~0.2s per eigh
+        # call) from dominating when many workers run in parallel.
+        try:
+            from threadpoolctl import threadpool_limits
+            _ctx = threadpool_limits(limits=1, user_api="blas")
+            _ctx.__enter__()
+        except ImportError:
+            _ctx = None
 
-            self._dynamic_whitening(block, data_range)
-            mixtures[:, start:end] = self._sphere @ data_c[:, start:end]
-            self._dynamic_orica(mixtures[:, start:end], data_range)
+        try:
+            for bi in range(n_blocks):
+                start = bi * block_size
+                end = min(n_pts, (bi + 1) * block_size)
+                data_range = np.arange(start, end) + 1  # 1-indexed, matches MATLAB
+                block = data_c[:, start:end]
+
+                self._dynamic_whitening(block, data_range)
+                mixtures[:, start:end] = self._sphere @ data_c[:, start:end]
+                self._dynamic_orica(mixtures[:, start:end], data_range)
+        finally:
+            if _ctx is not None:
+                _ctx.__exit__(None, None, None)

@@ -100,9 +100,23 @@ def _print_worker_banner(n_workers: int, info: dict, override: bool) -> None:
     print("──────────────────────────────────────────────────────────────────────")
 
 
+# Kept alive at module level so it is never GC'd — this is intentional.
+# All EEG matrix ops are on tiny (n_channels × n_channels) matrices.
+# Multi-threaded BLAS gives zero speedup here and causes severe thread-dispatch
+# overhead (~0.2s per tiny eigh/gemm call) when N workers run in parallel.
+_BLAS_PIN = None
+
+
 # Module-level wrapper required for ProcessPoolExecutor (lambdas/nested fns aren't picklable)
 def _run_subject_safe(set_path: Path, config, run_dir: Path,
                       ica_cache_dir: Optional[Path]) -> None:
+    global _BLAS_PIN
+    try:
+        from threadpoolctl import threadpool_limits
+        _BLAS_PIN = threadpool_limits(limits=1, user_api="blas")
+    except ImportError:
+        pass
+
     from benchmarks.run_validation import run_subject
     run_subject(set_path, config, run_dir, ica_cache_dir=ica_cache_dir)
 
@@ -201,6 +215,15 @@ def main() -> None:
     n_workers = args.workers if args.workers is not None else auto_n
     _print_worker_banner(n_workers, worker_info, override=args.workers is not None)
 
+    # All EEG matrix ops are on tiny (n_channels × n_channels) matrices.
+    # Set BLAS thread count to 1 in the environment BEFORE spawning workers so
+    # each child process inherits this before any BLAS library is initialised.
+    # Without this, OpenBLAS spawns 12 threads per tiny eigh/gemm call —
+    # ~0.2s overhead per call × 125 calls/chunk × 10 workers = hours of waste.
+    for _blas_var in ("OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                      "BLIS_NUM_THREADS", "OMP_NUM_THREADS"):
+        os.environ[_blas_var] = "1"
+
     run_tag = datetime.now().strftime("run_%Y%m%d_%H%M%S")
     run_dir = Path(args.output_dir) / run_tag
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -230,18 +253,25 @@ def main() -> None:
             pool.submit(_run_subject_safe, p, config, run_dir, ica_cache_dir): p
             for p in todo
         }
-        for fut in as_completed(futures):
-            path = futures[fut]
-            subject = path.parent.name
-            elapsed = time.monotonic() - batch_start
-            try:
-                fut.result()
-                succeeded.append(subject)
-                print(f"  ✓ {subject}  (elapsed {_format_seconds(elapsed)})")
-            except Exception as exc:
-                failed.append((subject, str(exc)))
-                print(f"  ✗ {subject}: {exc}  (elapsed {_format_seconds(elapsed)})",
-                      file=sys.stderr)
+        try:
+            for fut in as_completed(futures):
+                path = futures[fut]
+                subject = path.parent.name
+                elapsed = time.monotonic() - batch_start
+                try:
+                    fut.result()
+                    succeeded.append(subject)
+                    print(f"  ✓ {subject}  (elapsed {_format_seconds(elapsed)})")
+                except Exception as exc:
+                    failed.append((subject, str(exc)))
+                    print(f"  ✗ {subject}: {exc}  (elapsed {_format_seconds(elapsed)})",
+                          file=sys.stderr)
+        except KeyboardInterrupt:
+            print("\nInterrupted — cancelling remaining jobs...", file=sys.stderr)
+            for fut in futures:
+                fut.cancel()
+            pool.shutdown(wait=False, cancel_futures=True)
+            sys.exit(130)
 
     total_elapsed = time.monotonic() - batch_start
 
