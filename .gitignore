@@ -17,4 +17,6 @@ venv/
 !tests/data/*.set
 !tests/data/*.fdt
 benchmarks/results/
+benchmarks/ica_cache/
 .claude/
+*.log
