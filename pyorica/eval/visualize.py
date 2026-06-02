@@ -21,6 +21,9 @@ _LABEL_COLORS: dict[str, tuple[float, float, float]] = {
     'other':      (0.620, 0.620, 0.620),
 }
 
+# Legend order used for IC sorting (brain leftmost, other rightmost)
+_LABEL_ORDER = {label: i for i, label in enumerate(LABEL_NAMES)}
+
 
 def plot_ic_class_timeline(
     snapshots: list,
@@ -29,20 +32,19 @@ def plot_ic_class_timeline(
 ) -> None:
     """Save an IC-class timeline plot for one session.
 
-    Each cell shows the top-1 ICLabel class (color) and its confidence
-    (opacity). IC indices are fixed in their original ORICA order across
-    all snapshots.
+    ICs are sorted left-to-right by their weighted mean class position
+    across all snapshots (brain → other). Each cell shows the top-1
+    ICLabel class color. ICs classified as artifact at that snapshot are
+    marked with a white ×. The x-axis labels show the original ORICA IC
+    index so columns can be cross-referenced with the CSV.
 
     Parameters
     ----------
     snapshots:
-        List of ``(seq_num, top1_labels, top1_probs)`` tuples collected by
-        ``ICLabelClassifier`` with ``record_snapshots=True``.
-        ``top1_labels`` is a list of str of length ``n_ics``;
-        ``top1_probs`` is a float array of the same length.
+        List of ``(seq_num, top1_labels, top1_probs, artifact_mask)`` tuples
+        collected by ``ICLabelClassifier`` with ``record_snapshots=True``.
     classify_interval_s:
-        Seconds between consecutive classification events — used to convert
-        sequence numbers to wall-clock seconds on the x-axis.
+        Seconds between consecutive classification events.
     out_path:
         Destination path for the saved PNG.
     """
@@ -52,27 +54,49 @@ def plot_ic_class_timeline(
     n_snapshots = len(snapshots)
     n_ics = len(snapshots[0][1])
 
-    # Build RGB grid: shape (n_snapshots, n_ics, 3) — time on Y, IC on X
+    # Build label-index matrix (n_snapshots × n_ics) and artifact mask matrix
+    label_idx = np.zeros((n_snapshots, n_ics), dtype=np.int32)
+    removed = np.zeros((n_snapshots, n_ics), dtype=bool)
+    for row, (_seq, labels, _probs, mask) in enumerate(snapshots):
+        label_idx[row] = [_LABEL_ORDER[lbl] for lbl in labels]
+        removed[row] = mask
+
+    # Sort ICs by weighted mean label index across snapshots (brain=0 → other=6)
+    weighted_means = label_idx.mean(axis=0)
+    sort_order = np.argsort(weighted_means, kind='stable')
+
+    label_idx_sorted = label_idx[:, sort_order]
+    removed_sorted = removed[:, sort_order]
+
+    # Build RGB grid: shape (n_snapshots, n_ics, 3)
     rgb = np.ones((n_snapshots, n_ics, 3), dtype=np.float32)
-    for row, (_seq, labels, _probs) in enumerate(snapshots):
-        for col, label in enumerate(labels):
-            rgb[row, col] = _LABEL_COLORS[label]
+    for row in range(n_snapshots):
+        for col in range(n_ics):
+            rgb[row, col] = _LABEL_COLORS[LABEL_NAMES[label_idx_sorted[row, col]]]
 
     fig_w = max(6.0, n_ics * 0.5)
-    fig_h = max(5.0, n_snapshots * 0.6)
+    fig_h = max(4.0, n_snapshots * 0.25)
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
     ax.imshow(rgb, aspect='auto', interpolation='nearest', origin='upper')
 
-    # X-axis: IC index (fixed ORICA order)
-    ax.set_xticks(np.arange(n_ics))
-    ax.set_xticklabels([str(i) for i in range(n_ics)], fontsize=12)
-    ax.set_xlabel('IC index', fontsize=14)
+    # White × markers for artifact ICs (decision mask)
+    rows_removed, cols_removed = np.where(removed_sorted)
+    if rows_removed.size:
+        ax.scatter(cols_removed, rows_removed, marker='x', color='white',
+                   s=40, linewidths=1.2, zorder=3)
 
-    # Y-axis: time in seconds
-    ax.set_yticks(np.arange(n_snapshots))
+    # X-axis: original ORICA IC index in sorted order
+    ax.set_xticks(np.arange(n_ics))
+    ax.set_xticklabels([str(sort_order[i]) for i in range(n_ics)], fontsize=12)
+    ax.set_xlabel('IC index (sorted by class)', fontsize=14)
+
+    # Y-axis: compressed — ~6 evenly-spaced tick labels
+    tick_step = max(1, round(n_snapshots / 6))
+    tick_rows = np.arange(0, n_snapshots, tick_step)
+    ax.set_yticks(tick_rows)
     ax.set_yticklabels(
-        [f"{int(s * classify_interval_s)}s" for s in range(n_snapshots)],
+        [f"{int(r * classify_interval_s)}s" for r in tick_rows],
         fontsize=12,
     )
     ax.set_ylabel('Time', fontsize=14)
@@ -83,6 +107,9 @@ def plot_ic_class_timeline(
         mpatches.Patch(color=_LABEL_COLORS[label], label=label)
         for label in LABEL_NAMES
     ]
+    # Extra legend entry for the artifact marker
+    patches.append(plt.scatter([], [], marker='x', color='black', s=40,
+                               linewidths=1.2, label='removed (online)'))
     ax.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc='upper left',
               borderaxespad=0, fontsize=13)
 
