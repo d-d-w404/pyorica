@@ -52,40 +52,39 @@ def plot_ic_class_timeline(
     n_snapshots = len(snapshots)
     n_ics = len(snapshots[0][1])
 
-    # Build RGBA grid: shape (n_ics, n_snapshots, 4)
-    rgba = np.ones((n_ics, n_snapshots, 4), dtype=np.float32)
-    for col, (_seq, labels, probs) in enumerate(snapshots):
-        for row, (label, prob) in enumerate(zip(labels, probs)):
-            rgba[row, col, :3] = _LABEL_COLORS[label]
-            rgba[row, col, 3] = float(prob)
+    # Build RGB grid: shape (n_snapshots, n_ics, 3) — time on Y, IC on X
+    rgb = np.ones((n_snapshots, n_ics, 3), dtype=np.float32)
+    for row, (_seq, labels, _probs) in enumerate(snapshots):
+        for col, label in enumerate(labels):
+            rgb[row, col] = _LABEL_COLORS[label]
 
-    fig_w = max(8.0, n_snapshots * 0.9)
-    fig_h = max(4.0, n_ics * 0.35)
+    fig_w = max(6.0, n_ics * 0.5)
+    fig_h = max(5.0, n_snapshots * 0.6)
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
-    ax.imshow(rgba, aspect='auto', interpolation='nearest', origin='upper')
+    ax.imshow(rgb, aspect='auto', interpolation='nearest', origin='upper')
 
-    # X-axis: sequence numbers → seconds
-    ax.set_xticks(np.arange(n_snapshots))
-    ax.set_xticklabels(
+    # X-axis: IC index (fixed ORICA order)
+    ax.set_xticks(np.arange(n_ics))
+    ax.set_xticklabels([str(i) for i in range(n_ics)], fontsize=12)
+    ax.set_xlabel('IC index', fontsize=14)
+
+    # Y-axis: time in seconds
+    ax.set_yticks(np.arange(n_snapshots))
+    ax.set_yticklabels(
         [f"{int(s * classify_interval_s)}s" for s in range(n_snapshots)],
-        rotation=45, ha='right', fontsize=8,
+        fontsize=12,
     )
-    ax.set_xlabel('Time')
+    ax.set_ylabel('Time', fontsize=14)
 
-    # Y-axis: IC index (fixed ORICA order)
-    ax.set_yticks(np.arange(n_ics))
-    ax.set_yticklabels([f'IC {i}' for i in range(n_ics)], fontsize=7)
-    ax.set_ylabel('IC index')
-
-    ax.set_title('IC class timeline (color = class, opacity = confidence)')
+    ax.set_title('IC class timeline', fontsize=16)
 
     patches = [
         mpatches.Patch(color=_LABEL_COLORS[label], label=label)
         for label in LABEL_NAMES
     ]
     ax.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc='upper left',
-              borderaxespad=0, fontsize=8)
+              borderaxespad=0, fontsize=13)
 
     plt.tight_layout()
     plt.savefig(out_path, dpi=150, bbox_inches='tight')

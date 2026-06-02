@@ -114,12 +114,11 @@ benchmarks/results/run_20260527_120000/
 
 Generated automatically alongside each CSV. Shows how ORICA's online IC classifications evolve across the session:
 
-- **Y-axis** — IC index in fixed ORICA unmixing-matrix order (never reordered between snapshots)
-- **X-axis** — time in seconds; one column per ICLabel classification event (every `classify_interval_s`, default 30 s)
+- **X-axis** — IC index in fixed ORICA unmixing-matrix order (never reordered between snapshots)
+- **Y-axis** — time in seconds; one row per ICLabel classification event (every `classify_interval_s`, default 30 s)
 - **Cell color** — top-1 ICLabel class using the MNE-icalabel color convention (brain=blue, muscle=red, eog=green, ecg=pink, line\_noise=yellow, ch\_noise=orange, other=gray)
-- **Cell opacity** — confidence of the top-1 prediction (0 = uncertain, 1 = certain)
 
-The plot reflects the live ORICA weights at each snapshot, not a post-hoc offline ICA. Early snapshots may show lower confidence as ORICA converges.
+The plot reflects the live ORICA weights at each snapshot, not a post-hoc offline ICA.
 
 **Expected runtime:** ~15–30 min per subject (offline ICA is the bottleneck).
 

@@ -115,7 +115,7 @@ A single classification event captured by `ICLabelClassifier` when `record_snaps
 _Avoid_: classification result, label record, ICLabel output
 
 **IC class timeline**:
-A per-session visualization (`{subject}_ic_class_timeline.png`) showing IC class snapshots as a grid: IC index on the y-axis (fixed ORICA order), time in seconds on the x-axis, cell color = top-1 ICLabel class (MNE-icalabel color convention), cell opacity = confidence. Produced by `pyorica.eval.visualize.plot_ic_class_timeline`.
+A per-session visualization (`{subject}_ic_class_timeline.png`) showing IC class snapshots as a grid: IC index on the x-axis (fixed ORICA order), time in seconds on the y-axis, cell color = top-1 ICLabel class (MNE-icalabel color convention). Produced by `pyorica.eval.visualize.plot_ic_class_timeline`.
 _Avoid_: IC timeline plot, IC label plot, class history
 
 ## Relationships
