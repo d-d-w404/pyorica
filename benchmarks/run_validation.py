@@ -123,7 +123,8 @@ def run_subject(set_path: Path, config, out_dir: Path,
           f"({n_samples/sfreq:.0f} s) — calib {config.asr_calibration_seconds:.0f} s")
 
     info = _make_mne_info(ch_names, sfreq)
-    classifier = ICLabelClassifier(info, threshold=config.icalabel_threshold)
+    classifier = ICLabelClassifier(info, threshold=config.icalabel_threshold,
+                                   record_snapshots=True)
     pipeline = EEGPipeline(n_channels=n_ch, sfreq=sfreq,
                            classifier=classifier, verbose=True, config=config)
 
@@ -157,6 +158,17 @@ def run_subject(set_path: Path, config, out_dir: Path,
 
     config.to_yaml(out_dir / "config.yaml")
     print(f"[{subject}] written → {out_path}")
+
+    if classifier.snapshots:
+        from pyorica.eval.visualize import plot_ic_class_timeline
+        timeline_path = out_dir / f"{subject}_ic_class_timeline.png"
+        plot_ic_class_timeline(
+            classifier.snapshots,
+            config.classify_interval_s,
+            timeline_path,
+        )
+        print(f"[{subject}] written → {timeline_path}")
+
     return out_path
 
 

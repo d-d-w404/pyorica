@@ -32,13 +32,16 @@ class ICLabelClassifier:
     Requires ``pip install pyorica[pipeline]``.
     """
 
-    def __init__(self, info, artifact_labels=None, threshold=0.5):
+    def __init__(self, info, artifact_labels=None, threshold=0.5,
+                 record_snapshots=False):
         self._info = info
         self._artifact_labels = (
             set(artifact_labels) if artifact_labels is not None
             else set(_DEFAULT_ARTIFACT_LABELS)
         )
         self._threshold = threshold
+        self._record_snapshots = record_snapshots
+        self.snapshots: list = []  # (seq_num, top1_labels, top1_probs) per call
 
     def __call__(self, sources, mixing_matrix, sfreq):
         """Classify ICs and return an artifact mask.
@@ -66,11 +69,22 @@ class ICLabelClassifier:
         argmax_idx = np.argmax(proba, axis=1)
         pred_labels = [LABEL_NAMES[i] for i in argmax_idx]
         pred_proba = proba[np.arange(len(pred_labels)), argmax_idx]
-        return np.array(
+
+        mask = np.array(
             [label in self._artifact_labels and prob >= self._threshold
              for label, prob in zip(pred_labels, pred_proba)],
             dtype=bool,
         )
+
+        if self._record_snapshots:
+            self.snapshots.append((
+                len(self.snapshots),
+                pred_labels,
+                pred_proba.copy(),
+                mask.copy(),
+            ))
+
+        return mask
 
     def _get_probabilities(self, sources, mixing_matrix, sfreq):
         """Return ICLabel probability matrix of shape (n_components, 7).
