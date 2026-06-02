@@ -91,7 +91,9 @@ The cache is keyed by subject ID and `random_state` (default 42). If you run wit
 benchmarks/results/run_20260527_120000/
 ├── config.yaml                    ← exact parameters used
 ├── s1_ic_source_energy.csv
+├── s1_ic_class_timeline.png       ← IC class timeline (see below)
 ├── s2_ic_source_energy.csv
+├── s2_ic_class_timeline.png
 │   ...
 └── run_summary.txt                ← total/succeeded/failed/elapsed
 ```
@@ -107,6 +109,17 @@ benchmarks/results/run_20260527_120000/
 | `ms_orica` | Mean-square energy after ORICA |
 | `pct_asr` | % energy reduction: ASR vs IIR |
 | `pct_orica` | % energy reduction: ORICA vs IIR |
+
+**IC class timeline (`{subject}_ic_class_timeline.png`):**
+
+Generated automatically alongside each CSV. Shows how ORICA's online IC classifications evolve across the session:
+
+- **Y-axis** — IC index in fixed ORICA unmixing-matrix order (never reordered between snapshots)
+- **X-axis** — time in seconds; one column per ICLabel classification event (every `classify_interval_s`, default 30 s)
+- **Cell color** — top-1 ICLabel class using the MNE-icalabel color convention (brain=blue, muscle=red, eog=green, ecg=pink, line\_noise=yellow, ch\_noise=orange, other=gray)
+- **Cell opacity** — confidence of the top-1 prediction (0 = uncertain, 1 = certain)
+
+The plot reflects the live ORICA weights at each snapshot, not a post-hoc offline ICA. Early snapshots may show lower confidence as ORICA converges.
 
 **Expected runtime:** ~15–30 min per subject (offline ICA is the bottleneck).
 
@@ -142,6 +155,8 @@ python benchmarks/run_validation.py --subjects s1 \
                                     --output-dir benchmarks/results/debug \
                                     [--config my_config.yaml]
 ```
+
+Produces `s1_ic_source_energy.csv` and `s1_ic_class_timeline.png` in the output directory.
 
 ---
 

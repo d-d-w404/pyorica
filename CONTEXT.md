@@ -110,6 +110,14 @@ _Avoid_: IC power, source variance, IC energy
 A script in `benchmarks/` that loads sessions from a local dataset (path from `PYORICA_NCTU_DATA` env var), runs the pipeline in verbose mode, performs offline ICA analysis per session, and writes per-subject CSV results. Not part of the test suite.
 _Avoid_: experiment, validation script, evaluation script
 
+**IC class snapshot**:
+A single classification event captured by `ICLabelClassifier` when `record_snapshots=True`. Contains a sequence number (0, 1, 2…), the top-1 ICLabel class label per IC, and its confidence (top-1 probability). IC indices follow ORICA's unmixing matrix row order and are never reordered between snapshots.
+_Avoid_: classification result, label record, ICLabel output
+
+**IC class timeline**:
+A per-session visualization (`{subject}_ic_class_timeline.png`) showing IC class snapshots as a grid: IC index on the y-axis (fixed ORICA order), time in seconds on the x-axis, cell color = top-1 ICLabel class (MNE-icalabel color convention), cell opacity = confidence. Produced by `pyorica.eval.visualize.plot_ic_class_timeline`.
+_Avoid_: IC timeline plot, IC label plot, class history
+
 ## Relationships
 
 - A **Stream** yields one **Chunk** at a time to the **Pipeline**
@@ -121,6 +129,8 @@ _Avoid_: experiment, validation script, evaluation script
 - In **verbose mode**, the runner accumulates **stage arrays** (`raw`, `iir`, `asr`, `orica`) alongside the normal `RunResult`
 - **Offline ICA analysis** consumes the **stage arrays** from a verbose run; it uses a separate stable ICA decomposition, not the online ORICA weights, to ensure the measurement is independent of convergence state
 - **IC source MS energy** is computed per IC per stage inside **offline ICA analysis**; ICLabel class labels come from `mne-icalabel` applied to the ICA fitted on the IIR stage array
+- **IC class snapshots** are collected by `ICLabelClassifier` (when `record_snapshots=True`) during simulated real-time; one snapshot per classification interval, IC index order fixed to ORICA's unmixing matrix rows
+- The **IC class timeline** is produced by `pyorica.eval.visualize.plot_ic_class_timeline` from the collected snapshots after a session run; it is a benchmark-only output and does not affect pipeline behavior
 
 ## Example dialogue
 
