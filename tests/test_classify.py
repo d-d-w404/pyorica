@@ -12,8 +12,6 @@ RNG = np.random.default_rng(5)
 N_CH = 8
 SFREQ = 256.0
 
-LABEL_NAMES = ['brain', 'muscle', 'eog', 'ecg', 'line_noise', 'ch_noise', 'other']
-
 
 def _make_info():
     ch_names = ['Fz', 'Cz', 'Pz', 'Oz', 'F3', 'F4', 'P3', 'P4']
@@ -22,10 +20,18 @@ def _make_info():
     return info
 
 
-def _all_brain_proba(n):
-    proba = np.zeros((n, 7))
-    proba[:, 0] = 1.0
-    return proba
+def _call(clf, sources, unmixing=None, mixing=None, data=None):
+    data = RNG.standard_normal((N_CH, int(SFREQ * 4))) if data is None else data
+    unmixing = np.eye(N_CH) if unmixing is None else unmixing
+    mixing = np.eye(N_CH) if mixing is None else mixing
+    return clf(data, sources, unmixing, mixing, SFREQ)
+
+
+def _labels_probs(n, label_strings, prob_top1):
+    return (
+        np.asarray(label_strings, dtype=object),
+        np.asarray(prob_top1, dtype=np.float64),
+    )
 
 
 # ── Cycle 1: returns bool array with correct shape ────────────────────────
@@ -33,9 +39,10 @@ def _all_brain_proba(n):
 def test_returns_bool_array_with_correct_shape():
     clf = ICLabelClassifier(_make_info())
     sources = RNG.standard_normal((N_CH, int(SFREQ * 4)))
-    A = np.eye(N_CH)
-    with patch.object(clf, '_get_probabilities', return_value=_all_brain_proba(N_CH)):
-        mask = clf(sources, A, SFREQ)
+    labels = ["brain"] * N_CH
+    probs = [1.0] * N_CH
+    with patch.object(clf, '_run_icalabel', return_value=_labels_probs(N_CH, labels, probs)):
+        mask = _call(clf, sources)
     assert mask.dtype == bool
     assert mask.shape == (N_CH,)
 
@@ -45,9 +52,10 @@ def test_returns_bool_array_with_correct_shape():
 def test_all_brain_marks_no_artifacts():
     clf = ICLabelClassifier(_make_info())
     sources = RNG.standard_normal((N_CH, int(SFREQ * 4)))
-    A = np.eye(N_CH)
-    with patch.object(clf, '_get_probabilities', return_value=_all_brain_proba(N_CH)):
-        mask = clf(sources, A, SFREQ)
+    labels = ["brain"] * N_CH
+    probs = [1.0] * N_CH
+    with patch.object(clf, '_run_icalabel', return_value=_labels_probs(N_CH, labels, probs)):
+        mask = _call(clf, sources)
     assert not mask.any()
 
 
@@ -56,12 +64,12 @@ def test_all_brain_marks_no_artifacts():
 def test_artifact_above_threshold_is_marked():
     clf = ICLabelClassifier(_make_info(), threshold=0.5)
     sources = RNG.standard_normal((N_CH, int(SFREQ * 4)))
-    A = np.eye(N_CH)
-    proba = _all_brain_proba(N_CH)
-    proba[2, 0] = 0.1
-    proba[2, 2] = 0.9  # eye blink (index 2) on component 2
-    with patch.object(clf, '_get_probabilities', return_value=proba):
-        mask = clf(sources, A, SFREQ)
+    labels = ["brain"] * N_CH
+    labels[2] = "eye"
+    probs = [1.0] * N_CH
+    probs[2] = 0.9
+    with patch.object(clf, '_run_icalabel', return_value=_labels_probs(N_CH, labels, probs)):
+        mask = _call(clf, sources)
     assert mask[2]
     assert not mask[0]
 
@@ -71,26 +79,22 @@ def test_artifact_above_threshold_is_marked():
 def test_below_threshold_not_marked():
     clf = ICLabelClassifier(_make_info(), threshold=0.9)
     sources = RNG.standard_normal((N_CH, int(SFREQ * 4)))
-    A = np.eye(N_CH)
-    proba = _all_brain_proba(N_CH)
-    proba[0, 0] = 0.3
-    proba[0, 1] = 0.7  # muscle at 0.7, below threshold 0.9
-    with patch.object(clf, '_get_probabilities', return_value=proba):
-        mask = clf(sources, A, SFREQ)
+    labels = ["muscle"] + ["brain"] * (N_CH - 1)
+    probs = [0.7] + [1.0] * (N_CH - 1)
+    with patch.object(clf, '_run_icalabel', return_value=_labels_probs(N_CH, labels, probs)):
+        mask = _call(clf, sources)
     assert not mask[0]
 
 
-# ── Cycle 5: custom artifact_labels controls which labels are rejected ────
+# ── Cycle 5: legacy protects 'other' even above threshold ────────────────
 
-def test_custom_artifact_labels_excludes_unlisted():
-    clf = ICLabelClassifier(_make_info(), artifact_labels={'muscle', 'eog'})
+def test_other_label_never_marked():
+    clf = ICLabelClassifier(_make_info(), threshold=0.5)
     sources = RNG.standard_normal((N_CH, int(SFREQ * 4)))
-    A = np.eye(N_CH)
-    proba = _all_brain_proba(N_CH)
-    proba[0, 0] = 0.2
-    proba[0, 6] = 0.8  # 'other' above threshold, but not in artifact_labels
-    with patch.object(clf, '_get_probabilities', return_value=proba):
-        mask = clf(sources, A, SFREQ)
+    labels = ["other"] + ["brain"] * (N_CH - 1)
+    probs = [0.95] + [1.0] * (N_CH - 1)
+    with patch.object(clf, '_run_icalabel', return_value=_labels_probs(N_CH, labels, probs)):
+        mask = _call(clf, sources)
     assert not mask[0]
 
 
@@ -101,8 +105,7 @@ def test_iclabel_integration_returns_valid_mask():
     """ICLabelClassifier runs without error and returns a valid bool mask."""
     clf = ICLabelClassifier(_make_info())
     sources = RNG.standard_normal((N_CH, int(SFREQ * 4)))
-    A = np.eye(N_CH)
-    mask = clf(sources, A, SFREQ)
+    mask = _call(clf, sources)
     assert mask.dtype == bool
     assert mask.shape == (N_CH,)
 
@@ -110,14 +113,11 @@ def test_iclabel_integration_returns_valid_mask():
 # ── Cycle 7 (regression #18): short chunk must not crash ─────────────────
 
 def test_short_chunk_returns_no_artifacts_without_error():
-    """Chunks shorter than the ICLabel FIR filter (~825 taps) must not crash.
-
-    Regression test for the last-chunk shape mismatch seen on s3 and s5.
-    """
+    """Chunks shorter than the ICLabel FIR filter (~825 taps) must not crash."""
     clf = ICLabelClassifier(_make_info())
-    sources = RNG.standard_normal((N_CH, 40))  # well below the 825-sample minimum
-    A = np.eye(N_CH)
-    mask = clf(sources, A, SFREQ)             # must not raise
+    sources = RNG.standard_normal((N_CH, 40))
+    data = RNG.standard_normal((N_CH, 40))
+    mask = clf(data, sources, np.eye(N_CH), np.eye(N_CH), SFREQ)
     assert mask.dtype == bool
     assert mask.shape == (N_CH,)
-    assert not mask.any()                      # short chunk → treat as clean
+    assert not mask.any()

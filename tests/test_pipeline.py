@@ -45,7 +45,9 @@ def test_orica_attribute_is_orica_filter():
 
 def test_pass_all_classifier_output_equals_orica_reconstruction():
     """With no artifacts zeroed, process() == ORICA inverse_transform(transform())."""
-    pass_all = lambda sources, W, sfreq: np.zeros(sources.shape[0], dtype=bool)
+    pass_all = lambda data, sources, unmixing, mixing, sfreq: np.zeros(
+        sources.shape[0], dtype=bool
+    )
     p = _make_pipeline(classifier=pass_all)
 
     calibration = RNG.standard_normal((N_CH, int(SFREQ * 5)))
@@ -65,7 +67,9 @@ def test_pass_all_classifier_output_equals_orica_reconstruction():
 
 def test_zero_all_classifier_output_is_near_zero():
     """Zeroing every IC → reconstructed signal should be near zero."""
-    zero_all = lambda sources, W, sfreq: np.ones(sources.shape[0], dtype=bool)
+    zero_all = lambda data, sources, unmixing, mixing, sfreq: np.ones(
+        sources.shape[0], dtype=bool
+    )
     p = _make_pipeline(classifier=zero_all, classify_interval_s=0)  # per-chunk mode
 
     calibration = RNG.standard_normal((N_CH, int(SFREQ * 5)))
@@ -120,7 +124,7 @@ def test_verbose_false_stores_no_stage_attrs():
 
 def test_transient_artifact_is_attenuated():
     """Zeroing the highest-variance IC reduces RMS when a large artifact is present."""
-    def zero_max_var(sources, W, sfreq):
+    def zero_max_var(data, sources, unmixing, mixing, sfreq):
         mask = np.zeros(sources.shape[0], dtype=bool)
         mask[np.argmax(np.var(sources, axis=1))] = True
         return mask
