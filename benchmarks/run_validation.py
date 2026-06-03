@@ -20,6 +20,10 @@ Output
 One CSV per subject at ``{output_dir}/s{N}_ic_source_energy.csv`` with columns:
     ic, label, ms_iir, ms_asr, ms_orica, pct_asr, pct_orica
 
+Also writes ``{subject}_stages.npz`` with full time-series arrays for each
+pipeline stage (raw, IIR, ASR, ORICA) so ``analyze_results.py`` can recompute
+MS / pct **excluding** the calibration lead-in without re-running the pipeline.
+
 A ``config.yaml`` capturing all pipeline parameters is also written to output_dir.
 """
 
@@ -33,6 +37,13 @@ import time
 from pathlib import Path
 from typing import Optional
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
 import numpy as np
 
 
@@ -43,8 +54,8 @@ def _fmt_seconds(s: float) -> str:
     m, sec = divmod(s, 60)
     return f"{m}m{sec:02d}s"
 
-# ICLabel's MNE FIR filter (length ~825 at 250 Hz) needs > 825 samples per chunk.
-# 1000 samples = 4 s at 250 Hz gives comfortable headroom.
+# ICLabel's MNE FIR filter (length ~825 at 250 Hz) needs > 825 samples per chunk
+# when classify_interval_s=0.
 CHUNK_SIZE = 1000
 
 
@@ -89,7 +100,8 @@ def _make_mne_info(ch_names: list[str], sfreq: float):
 
 
 def run_subject(set_path: Path, config, out_dir: Path,
-                ica_cache_dir: Optional[Path] = None) -> Path:
+                ica_cache_dir: Optional[Path] = None,
+                max_seconds: Optional[float] = None) -> Path:
     """Run the full pipeline for one subject and write outputs to out_dir.
 
     Parameters
@@ -108,6 +120,7 @@ def run_subject(set_path: Path, config, out_dir: Path,
     """
     from pyorica.eval.ica_analysis import ic_source_energy
     from pyorica.eval.runner import run
+    from pyorica.pipeline.asr_calib import resolve_asr_calibration_npz
     from pyorica.pipeline.classify import ICLabelClassifier
     from pyorica.pipeline.pipeline import EEGPipeline
 
@@ -116,11 +129,28 @@ def run_subject(set_path: Path, config, out_dir: Path,
     data, sfreq, ch_names = _load_set(set_path)
     n_ch, n_samples = data.shape
 
+    if max_seconds is not None and max_seconds > 0:
+        max_samples = int(max_seconds * sfreq)
+        if max_samples < n_samples:
+            data = data[:, :max_samples]
+            n_samples = max_samples
+            print(f"[{subject}] truncated to {max_seconds:g} s ({n_samples} samples)")
+
+    chunk_size = int(getattr(config, "chunk_size", CHUNK_SIZE) or CHUNK_SIZE)
     calib_samples = int(config.asr_calibration_seconds * sfreq)
     calibration = data[:, :calib_samples]
+    calib_label = f"{config.asr_calibration_seconds:.0f} s session lead-in (ORICA)"
+
+    asr_npz = getattr(config, "asr_calibration_npz", None)
+    if not asr_npz:
+        raise ValueError(
+            f"[{subject}] asr_calibration_npz is required for ASRAdapter NPZ calibration"
+        )
+    asr_npz_path = resolve_asr_calibration_npz(asr_npz, subject)
+    print(f"[{subject}] ASR calib NPZ → {asr_npz_path}")
 
     print(f"[{subject}] {n_ch} ch, {sfreq} Hz, {n_samples} samples "
-          f"({n_samples/sfreq:.0f} s) — calib {config.asr_calibration_seconds:.0f} s")
+          f"({n_samples/sfreq:.0f} s) — calib {calib_label}")
 
     info = _make_mne_info(ch_names, sfreq)
     classifier = ICLabelClassifier(info, threshold=config.icalabel_threshold)
@@ -129,12 +159,34 @@ def run_subject(set_path: Path, config, out_dir: Path,
 
     print(f"[{subject}] running pipeline (ASR={config.asr_backend}, "
           f"cutoff={config.asr_cutoff}, ICLabel threshold={config.icalabel_threshold}, "
-          f"chunk={CHUNK_SIZE} samples)...")
+          f"chunk={chunk_size} samples)...")
     t0 = time.monotonic()
-    result = run(pipeline, data, chunk_size=CHUNK_SIZE,
-                 calibration_data=calibration, verbose=True,
-                 label=subject)
+    result = run(
+        pipeline, data, chunk_size=chunk_size,
+        calibration_data=calibration,
+        ch_names=ch_names,
+        asr_calibration_npz=str(asr_npz_path),
+        verbose=True,
+        label=subject,
+    )
     print(f"[{subject}] pipeline done  ({_fmt_seconds(time.monotonic() - t0)})")
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stages_path = out_dir / f"{subject}_stages.npz"
+    np.savez(
+        stages_path,
+        raw=result.raw,
+        iir=result.iir,
+        asr=result.asr,
+        orica=result.output,
+        ch_names=np.asarray(ch_names, dtype=object),
+        sfreq=np.float64(sfreq),
+        calib_samples=np.int64(calib_samples),
+    )
+    print(
+        f"[{subject}] stages saved → {stages_path} "
+        f"(raw/iir/asr/orica, shape {result.raw.shape})"
+    )
 
     print(f"[{subject}] running offline ICA analysis...")
     t0 = time.monotonic()
@@ -147,7 +199,6 @@ def run_subject(set_path: Path, config, out_dir: Path,
 
     print(f"[{subject}] ICA analysis done  ({_fmt_seconds(time.monotonic() - t0)})")
 
-    out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{subject}_ic_source_energy.csv"
     fieldnames = ["ic", "label", "ms_iir", "ms_asr", "ms_orica", "pct_asr", "pct_orica"]
     with open(out_path, "w", newline="") as f:
@@ -180,6 +231,10 @@ def main() -> None:
         "--ica-cache-dir", metavar="PATH",
         help="Directory for cached ICA objects (.fif/.pkl) and labels (.json). "
              "If a cache exists for a subject it is reused instead of re-fitting ICA.",
+    )
+    parser.add_argument(
+        "--max-seconds", type=float, metavar="SEC",
+        help="Process only the first SEC seconds of each session (for quick tests).",
     )
     args = parser.parse_args()
 
@@ -220,7 +275,11 @@ def main() -> None:
     errors = []
     for set_path in sessions:
         try:
-            run_subject(set_path, config, output_dir, ica_cache_dir=ica_cache_dir)
+            run_subject(
+                set_path, config, output_dir,
+                ica_cache_dir=ica_cache_dir,
+                max_seconds=args.max_seconds,
+            )
         except Exception as exc:
             subject = set_path.parent.name
             print(f"[{subject}] ERROR: {exc}", file=sys.stderr)

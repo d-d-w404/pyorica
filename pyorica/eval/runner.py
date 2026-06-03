@@ -53,7 +53,8 @@ class RunResult:
 
 
 def run(pipeline, data, chunk_size=64, calibration_data=None, verbose=False,
-        label: Optional[str] = None, progress_interval: float = 30.0):
+        label: Optional[str] = None, progress_interval: float = 30.0,
+        ch_names=None, asr_calibration_npz=None):
     """Run a pipeline over data in simulated real-time.
 
     Parameters
@@ -82,7 +83,12 @@ def run(pipeline, data, chunk_size=64, calibration_data=None, verbose=False,
     if calibration_data is not None:
         if label is not None:
             print(f"[{label}] calibrating (ASR fit + ORICA warm-start)...", flush=True)
-        pipeline.fit(calibration_data, label=label)
+        pipeline.fit(
+            calibration_data,
+            label=label,
+            ch_names=ch_names,
+            asr_calibration_npz=asr_calibration_npz,
+        )
         if label is not None:
             print(f"[{label}] calibration done  ({_fmt_seconds(time.monotonic() - t_start)})",
                   flush=True)

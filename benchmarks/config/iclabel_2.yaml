@@ -1,4 +1,4 @@
-# pyorica PipelineConfig — reference experiment (iclabel_2 / SN_Driveasrpy20_2min_70)
+# iclabel_2 — ASR from external NPZ (ORICA initialize_asr_from_npz_1)
 
 iir_l_freq: 1.0
 iir_h_freq: 50.0

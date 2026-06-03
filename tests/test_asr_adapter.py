@@ -18,18 +18,18 @@ def _eeg_like(n_samples: int) -> np.ndarray:
 # ── Cycle 1: invalid backend raises ValueError ────────────────────────────
 
 def test_invalid_backend_raises():
-    from pyorica.pipeline.asr import ASRAdapter
+    from pyorica.pipeline.asr import ASRAdapter_old
     with pytest.raises(ValueError, match="backend"):
-        ASRAdapter(backend="bogus", sfreq=SFREQ)
+        ASRAdapter_old(backend="bogus", sfreq=SFREQ)
 
 
 # ── Cycle 3: asrpy backend fits and transforms (skip if not installed) ───
 
 def test_asrpy_backend_fits_and_transforms():
     pytest.importorskip("asrpy")
-    from pyorica.pipeline.asr import ASRAdapter
+    from pyorica.pipeline.asr import ASRAdapter_old
     calib = _eeg_like(int(SFREQ * 30))
-    adapter = ASRAdapter(backend="asrpy", sfreq=SFREQ, cutoff=20.0)
+    adapter = ASRAdapter_old(backend="asrpy", sfreq=SFREQ, cutoff=20.0)
     adapter.fit(calib)
     chunk = _eeg_like(64)
     out = adapter.transform(chunk)
@@ -39,9 +39,9 @@ def test_asrpy_backend_fits_and_transforms():
 def test_asrpy_transform_preserves_state_across_chunks():
     """Stateful R/Zi/cov should persist — transform must not error on repeated calls."""
     pytest.importorskip("asrpy")
-    from pyorica.pipeline.asr import ASRAdapter
+    from pyorica.pipeline.asr import ASRAdapter_old
     calib = _eeg_like(int(SFREQ * 30))
-    adapter = ASRAdapter(backend="asrpy", sfreq=SFREQ, cutoff=20.0)
+    adapter = ASRAdapter_old(backend="asrpy", sfreq=SFREQ, cutoff=20.0)
     adapter.fit(calib)
     for _ in range(5):
         chunk = _eeg_like(64)
@@ -72,9 +72,9 @@ def test_pipeline_meegkit_backend_processes_correctly():
 # ── Cycle 2: meegkit backend fits and transforms ──────────────────────────
 
 def test_meegkit_backend_fits_and_transforms():
-    from pyorica.pipeline.asr import ASRAdapter
+    from pyorica.pipeline.asr import ASRAdapter_old
     calib = _eeg_like(int(SFREQ * 30))
-    adapter = ASRAdapter(backend="meegkit", sfreq=SFREQ, cutoff=20.0)
+    adapter = ASRAdapter_old(backend="meegkit", sfreq=SFREQ, cutoff=20.0)
     adapter.fit(calib)
     chunk = _eeg_like(64)
     out = adapter.transform(chunk)

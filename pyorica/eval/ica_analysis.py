@@ -130,12 +130,17 @@ def ic_source_energy(
     max_iter: int = 500,
     cache_dir: Optional[Path] = None,
     subject: Optional[str] = None,
+    exclude_lead_seconds: float = 0.0,
 ) -> List[dict]:
     """Compute per-IC source mean-square energy across pipeline stages.
 
-    Fits MNE extended-Infomax ICA on the IIR stage array, applies the resulting
-    unmixing matrix to all three stage arrays, and computes per-IC MS energy.
-    ICs are classified by ICLabel.
+    Fits MNE extended-Infomax ICA on the **full** IIR stage array, applies the
+    resulting unmixing matrix to all three stage arrays, and computes per-IC MS
+    energy. ICs are classified by ICLabel.
+
+    When *exclude_lead_seconds* > 0, MS / pct stats use only samples after that
+    lead-in (e.g. skip ASR calibration). ICA is still fit on the full IIR
+    recording.
 
     Parameters
     ----------
@@ -153,6 +158,9 @@ def ic_source_energy(
         Random seed passed to MNE ICA.
     max_iter : int
         Maximum ICA iterations.
+    exclude_lead_seconds : float
+        If > 0, MS / pct stats ignore the first this many seconds of data.
+        ICA fitting still uses the full IIR array.
 
     Returns
     -------
@@ -184,11 +192,22 @@ def ic_source_energy(
     src_asr = _project_sources(ica, asr)
     src_orica = _project_sources(ica, orica)
 
+    skip = int(round(float(exclude_lead_seconds) * sfreq))
+    n_samples = src_iir.shape[1]
+    if skip < 0:
+        raise ValueError("exclude_lead_seconds must be >= 0")
+    if skip >= n_samples:
+        raise ValueError(
+            f"exclude_lead_seconds={exclude_lead_seconds} ({skip} samples) "
+            f"leaves no samples for MS stats (recording has {n_samples} samples)"
+        )
+    sl = slice(skip, None) if skip else slice(None)
+
     results = []
     for i, label in enumerate(labels):
-        ms_iir = float(np.mean(src_iir[i] ** 2))
-        ms_asr = float(np.mean(src_asr[i] ** 2))
-        ms_orica = float(np.mean(src_orica[i] ** 2))
+        ms_iir = float(np.mean(src_iir[i, sl] ** 2))
+        ms_asr = float(np.mean(src_asr[i, sl] ** 2))
+        ms_orica = float(np.mean(src_orica[i, sl] ** 2))
         denom = ms_iir if ms_iir > 0 else 1.0
         results.append({
             "ic": i,

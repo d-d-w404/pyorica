@@ -21,7 +21,6 @@ class EEGPipeline:
                  asr_backend="asrpy", asr_cutoff=20.0,
                  classifier=None, orica_kwargs=None, verbose=False,
                  config=None, classify_interval_s=30.0):
-        # config takes precedence over individual kwargs when provided
         if config is not None:
             l_freq = config.iir_l_freq
             h_freq = config.iir_h_freq
@@ -46,17 +45,13 @@ class EEGPipeline:
         self.orica = ORICAFilter(n_channels, sfreq, **(orica_kwargs or {}))
         self._classifier = classifier if classifier is not None else _no_artifacts
 
-        # Classification interval state (causal: mask from interval T applied at T+1)
-        self._classify_interval_samples = int(sfreq * classify_interval_s)  # 0 = every chunk
+        self._classify_interval_samples = int(sfreq * classify_interval_s)
         self._samples_since_classify = 0
-        self._cached_mask: np.ndarray | None = None  # None = no mask computed yet
+        self._cached_mask: np.ndarray | None = None
 
-    def fit(self, calibration_data, label=None):
-        """Calibrate ASR and warm-start ORICA on calibration data.
-
-        Pipeline: IIR filter all calib data → ASR fit → ASR clean → ORICA warm-start.
-        ORICA sees ASR-cleaned data so its initial weights reflect artifact-free signals.
-        """
+    def fit(self, calibration_data, label=None, ch_names=None,
+            asr_calibration_npz=None):
+        """Calibrate ASR (external NPZ) and warm-start ORICA on session lead-in."""
         def _step(name):
             now = time.monotonic()
             elapsed = now - _step.t0
@@ -72,9 +67,17 @@ class EEGPipeline:
 
         orica_input = iir_filtered
         try:
-            self._asr.fit(iir_filtered)
+            if asr_calibration_npz is None:
+                raise ValueError(
+                    "ASRAdapter requires asr_calibration_npz (external NPZ path)"
+                )
+            self._asr.fit(
+                asr_calibration_npz,
+                ch_names=ch_names,
+                n_channels=self._n_channels,
+            )
             self._asr_fitted = True
-            _step("ASR.fit done")
+            _step("ASR.fit done (external NPZ)")
             orica_input = self._asr.transform(iir_filtered)
             _step("ASR.transform done")
         except Exception as exc:
@@ -121,12 +124,9 @@ class EEGPipeline:
         mixing = np.linalg.pinv(unmixing)
 
         if self._classify_interval_samples == 0:
-            # Legacy per-chunk mode: compute mask and apply immediately (original behaviour)
             mask = self._classifier(out, sources, unmixing, mixing, self._sfreq)
             sources[mask] = 0.0
         else:
-            # Interval mode — causal: apply cached mask from the PREVIOUS interval first,
-            # then check whether the current chunk crosses the threshold for a new run.
             if self._cached_mask is not None:
                 sources[self._cached_mask] = 0.0
 
@@ -135,7 +135,6 @@ class EEGPipeline:
                 self._cached_mask = self._classifier(
                     out, sources, unmixing, mixing, self._sfreq
                 )
-                # Carry over the overage so long sessions stay phase-locked to the interval
                 self._samples_since_classify %= self._classify_interval_samples
 
         return self.orica.inverse_transform(sources)

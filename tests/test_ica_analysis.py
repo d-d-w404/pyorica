@@ -113,6 +113,26 @@ def test_ic_field_is_sequential_index():
     assert [row['ic'] for row in result] == list(range(N_CH))
 
 
+# ── exclude_lead_seconds ─────────────────────────────────────────────────
+
+def test_exclude_lead_seconds_changes_ms():
+    iir, asr, orica = _make_stages()
+    # Make the first 10 s differ from the rest so trimming changes MS.
+    skip = int(10 * SFREQ)
+    iir[:, :skip] *= 3.0
+    asr[:, :skip] *= 3.0
+    orica[:, :skip] *= 3.0
+    with patch('pyorica.eval.ica_analysis._fit_ica') as mock_fit, \
+         patch('pyorica.eval.ica_analysis._label_ica') as mock_label:
+        mock_fit.return_value = _mock_ica(N_CH)
+        mock_label.return_value = ['other'] * N_CH
+        full = ic_source_energy(iir, asr, orica, CH_NAMES, SFREQ)
+        trimmed = ic_source_energy(
+            iir, asr, orica, CH_NAMES, SFREQ, exclude_lead_seconds=10.0,
+        )
+    assert full[0]['ms_iir'] != trimmed[0]['ms_iir']
+
+
 # ── Cycle 6 (slow): integration with real MNE ICA + ICLabel ──────────────
 
 @pytest.mark.slow

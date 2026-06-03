@@ -35,6 +35,13 @@ import argparse
 import os
 import sys
 import time
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -141,7 +148,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--output-dir", default="benchmarks/results",
-        help="Parent directory for run outputs (default: benchmarks/results).",
+        help="Parent directory for run outputs (default: benchmarks/results). "
+             "Ignored if --run-dir is given.",
+    )
+    parser.add_argument(
+        "--run-dir", metavar="PATH",
+        help="Full output directory for this run (no timestamp appended). "
+             "If it already exists, subjects with existing CSVs are skipped.",
     )
     parser.add_argument(
         "--subjects", nargs="*", metavar="SID",
@@ -224,8 +237,11 @@ def main() -> None:
                       "BLIS_NUM_THREADS", "OMP_NUM_THREADS"):
         os.environ[_blas_var] = "1"
 
-    run_tag = datetime.now().strftime("run_%Y%m%d_%H%M%S")
-    run_dir = Path(args.output_dir) / run_tag
+    if args.run_dir:
+        run_dir = Path(args.run_dir)
+    else:
+        run_tag = datetime.now().strftime("run_%Y%m%d_%H%M%S")
+        run_dir = Path(args.output_dir) / run_tag
     run_dir.mkdir(parents=True, exist_ok=True)
     config.to_yaml(run_dir / "config.yaml")
 
@@ -240,13 +256,18 @@ def main() -> None:
     print(f"ICLabel thr : {config.icalabel_threshold}")
     print(f"Output dir  : {run_dir.resolve()}\n")
 
+    def _subject_complete(subject: str) -> bool:
+        return (
+            (run_dir / f"{subject}_ic_source_energy.csv").exists()
+            and (run_dir / f"{subject}_stages.npz").exists()
+        )
+
     # Separate already-complete subjects before touching the pool
-    todo = [p for p in sessions
-            if not (run_dir / f"{p.parent.name}_ic_source_energy.csv").exists()]
+    todo = [p for p in sessions if not _subject_complete(p.parent.name)]
     for p in sessions:
         if p not in set(todo):
             skipped.append(p.parent.name)
-            print(f"  → {p.parent.name} skipped (output already exists)")
+            print(f"  → {p.parent.name} skipped (CSV + stages NPZ already exist)")
 
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futures = {
@@ -261,10 +282,10 @@ def main() -> None:
                 try:
                     fut.result()
                     succeeded.append(subject)
-                    print(f"  ✓ {subject}  (elapsed {_format_seconds(elapsed)})")
+                    print(f"  [OK] {subject}  (elapsed {_format_seconds(elapsed)})")
                 except Exception as exc:
                     failed.append((subject, str(exc)))
-                    print(f"  ✗ {subject}: {exc}  (elapsed {_format_seconds(elapsed)})",
+                    print(f"  [FAIL] {subject}: {exc}  (elapsed {_format_seconds(elapsed)})",
                           file=sys.stderr)
         except KeyboardInterrupt:
             print("\nInterrupted — cancelling remaining jobs...", file=sys.stderr)
@@ -276,7 +297,7 @@ def main() -> None:
     total_elapsed = time.monotonic() - batch_start
 
     summary_lines = [
-        f"pyorica batch benchmark — {run_tag}",
+        f"pyorica batch benchmark — {run_dir.name}",
         f"Total subjects : {total}",
         f"Succeeded      : {len(succeeded)}",
         f"Skipped        : {len(skipped)}",

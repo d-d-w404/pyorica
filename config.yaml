@@ -1,4 +1,5 @@
 # pyorica PipelineConfig — reference experiment (iclabel_2 / SN_Driveasrpy20_2min_70)
+# Usage: python benchmarks/run_validation.py --config config.yaml --subjects s02
 
 iir_l_freq: 1.0
 iir_h_freq: 50.0
