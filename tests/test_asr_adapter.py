@@ -79,3 +79,34 @@ def test_meegkit_backend_fits_and_transforms():
     chunk = _eeg_like(64)
     out = adapter.transform(chunk)
     assert out.shape == chunk.shape
+
+
+# ── ASRAdapter_new: session lead-in calibration + NPZ save ───────────────
+
+def test_asr_adapter_new_fits_from_session_leadin_and_saves_npz(tmp_path):
+    pytest.importorskip("asrpy")
+    from pyorica.pipeline.asr import ASRAdapter_new
+
+    calib_sec = 30.0
+    session = _eeg_like(int(SFREQ * (calib_sec + 10)))
+    npz_path = tmp_path / "s01_leadin_calib.npz"
+
+    adapter = ASRAdapter_new(
+        backend="asrpy", sfreq=SFREQ, cutoff=20.0, calibration_seconds=calib_sec
+    )
+    adapter.fit(
+        session,
+        save_calibration_path=npz_path,
+    )
+
+    assert adapter.calibration_data is not None
+    assert adapter.calibration_data.shape[1] == int(calib_sec * SFREQ)
+    assert npz_path.is_file()
+
+    saved = np.load(npz_path, allow_pickle=True)
+    assert "calibration_data" in saved.files
+    assert saved["calibration_data"].shape == adapter.calibration_data.shape
+
+    chunk = _eeg_like(64)
+    out = adapter.transform(chunk)
+    assert out.shape == chunk.shape

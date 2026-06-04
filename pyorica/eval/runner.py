@@ -54,7 +54,8 @@ class RunResult:
 
 def run(pipeline, data, chunk_size=64, calibration_data=None, verbose=False,
         label: Optional[str] = None, progress_interval: float = 30.0,
-        ch_names=None, asr_calibration_npz=None):
+        ch_names=None, asr_calibration_npz=None, session_data=None,
+        asr_calibration_save_path=None):
     """Run a pipeline over data in simulated real-time.
 
     Parameters
@@ -88,6 +89,8 @@ def run(pipeline, data, chunk_size=64, calibration_data=None, verbose=False,
             label=label,
             ch_names=ch_names,
             asr_calibration_npz=asr_calibration_npz,
+            session_data=session_data,
+            asr_calibration_save_path=asr_calibration_save_path,
         )
         if label is not None:
             print(f"[{label}] calibration done  ({_fmt_seconds(time.monotonic() - t_start)})",

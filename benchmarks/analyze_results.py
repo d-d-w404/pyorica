@@ -16,7 +16,7 @@ from MS / pct stats (``asr_calibration_seconds`` from ``config.yaml``, default 1
 
 Usage
 -----
-    python benchmarks/analyze_results.py --run-dir benchmarks/result/all/iclabel_1
+    python benchmarks/analyze_results.py --run-dir benchmarks/result/all/s05_iclabel_interval__asr_fit
 """
 
 from __future__ import annotations
@@ -26,6 +26,10 @@ import csv
 import os
 import sys
 from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -320,10 +324,6 @@ def backfill_missing_stages_npz(
     recovers them from the original ``.set`` / ``.fdt`` files.
     """
     from pyorica.config import PipelineConfig
-
-    _root = Path(__file__).resolve().parent.parent
-    if str(_root) not in sys.path:
-        sys.path.insert(0, str(_root))
     from benchmarks.run_validation import run_subject
 
     config_path = run_dir / "config.yaml"

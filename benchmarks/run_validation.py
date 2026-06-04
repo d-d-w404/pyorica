@@ -37,6 +37,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -141,13 +145,24 @@ def run_subject(set_path: Path, config, out_dir: Path,
     calibration = data[:, :calib_samples]
     calib_label = f"{config.asr_calibration_seconds:.0f} s session lead-in (ORICA)"
 
-    asr_npz = getattr(config, "asr_calibration_npz", None)
-    if not asr_npz:
-        raise ValueError(
-            f"[{subject}] asr_calibration_npz is required for ASRAdapter NPZ calibration"
+    asr_source = getattr(config, "asr_calibration_source", "npz")
+    asr_npz_path = None
+    asr_calib_save_path = None
+    if asr_source == "session":
+        asr_calib_save_path = out_dir / f"{subject}_asr_calib_leadin.npz"
+        print(
+            f"[{subject}] ASR calib: session lead-in "
+            f"({config.asr_calibration_seconds:.0f} s) → {asr_calib_save_path.name}"
         )
-    asr_npz_path = resolve_asr_calibration_npz(asr_npz, subject)
-    print(f"[{subject}] ASR calib NPZ → {asr_npz_path}")
+    else:
+        asr_npz = getattr(config, "asr_calibration_npz", None)
+        if not asr_npz:
+            raise ValueError(
+                f"[{subject}] asr_calibration_npz is required when "
+                f"asr_calibration_source='npz'"
+            )
+        asr_npz_path = resolve_asr_calibration_npz(asr_npz, subject)
+        print(f"[{subject}] ASR calib NPZ → {asr_npz_path}")
 
     print(f"[{subject}] {n_ch} ch, {sfreq} Hz, {n_samples} samples "
           f"({n_samples/sfreq:.0f} s) — calib {calib_label}")
@@ -158,17 +173,22 @@ def run_subject(set_path: Path, config, out_dir: Path,
                            classifier=classifier, verbose=True, config=config)
 
     print(f"[{subject}] running pipeline (ASR={config.asr_backend}, "
-          f"cutoff={config.asr_cutoff}, ICLabel threshold={config.icalabel_threshold}, "
+          f"source={asr_source}, cutoff={config.asr_cutoff}, "
+          f"ICLabel threshold={config.icalabel_threshold}, "
           f"chunk={chunk_size} samples)...")
     t0 = time.monotonic()
-    result = run(
-        pipeline, data, chunk_size=chunk_size,
+    run_kwargs = dict(
         calibration_data=calibration,
         ch_names=ch_names,
-        asr_calibration_npz=str(asr_npz_path),
         verbose=True,
         label=subject,
     )
+    if asr_source == "session":
+        run_kwargs["session_data"] = data
+        run_kwargs["asr_calibration_save_path"] = asr_calib_save_path
+    else:
+        run_kwargs["asr_calibration_npz"] = str(asr_npz_path)
+    result = run(pipeline, data, chunk_size=chunk_size, **run_kwargs)
     print(f"[{subject}] pipeline done  ({_fmt_seconds(time.monotonic() - t0)})")
 
     out_dir.mkdir(parents=True, exist_ok=True)

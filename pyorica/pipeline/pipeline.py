@@ -7,7 +7,7 @@ import numpy as np
 
 from pyorica.filters.iir import IIRFilter
 from pyorica.orica.core import ORICAFilter
-from pyorica.pipeline.asr import ASRAdapter
+from pyorica.pipeline.asr import ASRAdapter, ASRAdapter_new
 
 
 def _no_artifacts(data, sources, unmixing, mixing, sfreq):
@@ -40,7 +40,22 @@ class EEGPipeline:
         self._sfreq = sfreq
         self._verbose = verbose
         self._iir = IIRFilter(n_channels, sfreq, l_freq=l_freq, h_freq=h_freq)
-        self._asr = ASRAdapter(backend=asr_backend, sfreq=sfreq, cutoff=asr_cutoff)
+        asr_source = (
+            getattr(config, "asr_calibration_source", "npz") if config is not None else "npz"
+        )
+        calib_sec = (
+            float(config.asr_calibration_seconds) if config is not None else 120.0
+        )
+        if asr_source == "session":
+            self._asr = ASRAdapter_new(
+                backend=asr_backend,
+                sfreq=sfreq,
+                cutoff=asr_cutoff,
+                calibration_seconds=calib_sec,
+            )
+        else:
+            self._asr = ASRAdapter(backend=asr_backend, sfreq=sfreq, cutoff=asr_cutoff)
+        self._asr_calibration_source = asr_source
         self._asr_fitted = False
         self.orica = ORICAFilter(n_channels, sfreq, **(orica_kwargs or {}))
         self._classifier = classifier if classifier is not None else _no_artifacts
@@ -50,8 +65,9 @@ class EEGPipeline:
         self._cached_mask: np.ndarray | None = None
 
     def fit(self, calibration_data, label=None, ch_names=None,
-            asr_calibration_npz=None):
-        """Calibrate ASR (external NPZ) and warm-start ORICA on session lead-in."""
+            asr_calibration_npz=None, session_data=None,
+            asr_calibration_save_path=None):
+        """Calibrate ASR and warm-start ORICA on session lead-in."""
         def _step(name):
             now = time.monotonic()
             elapsed = now - _step.t0
@@ -67,17 +83,31 @@ class EEGPipeline:
 
         orica_input = iir_filtered
         try:
-            if asr_calibration_npz is None:
-                raise ValueError(
-                    "ASRAdapter requires asr_calibration_npz (external NPZ path)"
+            if self._asr_calibration_source == "session":
+                if session_data is None:
+                    raise ValueError(
+                        "session_data is required when asr_calibration_source='session'"
+                    )
+                self._asr.fit(
+                    session_data,
+                    ch_names=ch_names,
+                    n_channels=self._n_channels,
+                    save_calibration_path=asr_calibration_save_path,
                 )
-            self._asr.fit(
-                asr_calibration_npz,
-                ch_names=ch_names,
-                n_channels=self._n_channels,
-            )
-            self._asr_fitted = True
-            _step("ASR.fit done (external NPZ)")
+                self._asr_fitted = True
+                _step("ASR.fit done (session lead-in)")
+            else:
+                if asr_calibration_npz is None:
+                    raise ValueError(
+                        "ASRAdapter requires asr_calibration_npz (external NPZ path)"
+                    )
+                self._asr.fit(
+                    asr_calibration_npz,
+                    ch_names=ch_names,
+                    n_channels=self._n_channels,
+                )
+                self._asr_fitted = True
+                _step("ASR.fit done (external NPZ)")
             orica_input = self._asr.transform(iir_filtered)
             _step("ASR.transform done")
         except Exception as exc:

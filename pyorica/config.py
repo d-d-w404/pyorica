@@ -17,6 +17,8 @@ class PipelineConfig:
     asr_cutoff: float = 20.0
     asr_calibration_seconds: float = 120.0
     asr_calibration_npz: Optional[str] = None
+    # "npz" = external NPZ (ASRAdapter); "session" = session lead-in (ASRAdapter_new)
+    asr_calibration_source: str = "npz"
     chunk_size: int = 1000
     # ORICA
     orica_ff_profile: str = "cooling"
@@ -51,6 +53,7 @@ class PipelineConfig:
             f'asr_backend: "{self.asr_backend}"     # "asrpy" (default) or "meegkit"',
             f"asr_cutoff: {self.asr_cutoff}          # SD multiplier; higher = less aggressive cleaning",
             f"asr_calibration_seconds: {self.asr_calibration_seconds}  # session lead-in for ORICA warm-start",
+            f'asr_calibration_source: "{self.asr_calibration_source}"  # "npz" or "session"',
             f"asr_calibration_npz: {npz_val}  # external ASR calib NPZ; {{subject}} ok",
             f"chunk_size: {self.chunk_size}  # samples per simulated-real-time pipeline chunk",
             "",
