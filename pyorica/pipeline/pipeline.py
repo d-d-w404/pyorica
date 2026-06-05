@@ -21,9 +21,11 @@ class EEGPipeline:
                  asr_backend="asrpy", asr_cutoff=20.0,
                  classifier=None, orica_kwargs=None, verbose=False,
                  config=None, classify_interval_s=30.0):
+        iir_order = 4
         if config is not None:
             l_freq = config.iir_l_freq
             h_freq = config.iir_h_freq
+            iir_order = config.iir_order
             asr_backend = config.asr_backend
             asr_cutoff = config.asr_cutoff
             classify_interval_s = config.classify_interval_s
@@ -39,7 +41,9 @@ class EEGPipeline:
         self._n_channels = n_channels
         self._sfreq = sfreq
         self._verbose = verbose
-        self._iir = IIRFilter(n_channels, sfreq, l_freq=l_freq, h_freq=h_freq)
+        self._iir = IIRFilter(
+            n_channels, sfreq, l_freq=l_freq, h_freq=h_freq, order=iir_order
+        )
         asr_source = (
             getattr(config, "asr_calibration_source", "npz") if config is not None else "npz"
         )
@@ -52,6 +56,9 @@ class EEGPipeline:
                 sfreq=sfreq,
                 cutoff=asr_cutoff,
                 calibration_seconds=calib_sec,
+                iir_l_freq=l_freq,
+                iir_h_freq=h_freq,
+                iir_order=iir_order,
             )
         else:
             self._asr = ASRAdapter(backend=asr_backend, sfreq=sfreq, cutoff=asr_cutoff)

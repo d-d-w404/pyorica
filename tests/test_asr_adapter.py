@@ -101,6 +101,7 @@ def test_asr_adapter_new_fits_from_session_leadin_and_saves_npz(tmp_path):
 
     assert adapter.calibration_data is not None
     assert adapter.calibration_data.shape[1] == int(calib_sec * SFREQ)
+    assert not np.allclose(adapter.calibration_data, session[:, :adapter.calibration_data.shape[1]])
     assert npz_path.is_file()
 
     saved = np.load(npz_path, allow_pickle=True)

@@ -223,7 +223,7 @@ def main() -> None:
     parser.add_argument(
         "--pyorica-npz",
         type=Path,
-        default=root / "benchmarks/result/all/t3/s02_stages.npz",
+        default=root / "benchmarks/result/all/s02_iclabel_interval__asr_fit/s02_stages.npz",
         help="pyorica stages NPZ (raw/iir/asr/orica keys).",
     )
     parser.add_argument(
