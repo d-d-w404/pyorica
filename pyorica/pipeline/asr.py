@@ -87,8 +87,13 @@ class ASRAdapter:
         ch_names = [f"EEG{i:03d}" for i in range(n_ch)]
         info = mne.create_info(ch_names, sfreq=float(self._sfreq),
                                ch_types="eeg", verbose=False)
-        raw = mne.io.RawArray(data, info, verbose=False)
         asr = asrpy.ASR(sfreq=float(self._sfreq), cutoff=float(self._cutoff))
+        # asrpy block_covariance has an off-by-one when (n_samples - 2) % blocksize == 0;
+        # trimming one sample avoids the bug with negligible effect on calibration.
+        blocksize = getattr(asr, "blocksize", 100)
+        if data.shape[1] >= 3 and (data.shape[1] - 2) % blocksize == 0:
+            data = data[:, :-1]
+        raw = mne.io.RawArray(data, info, verbose=False)
         try:
             from threadpoolctl import threadpool_limits
             _ctx = threadpool_limits(limits=1, user_api="blas")

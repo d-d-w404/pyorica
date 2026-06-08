@@ -61,7 +61,7 @@ The standard-deviation multiplier (e.g. `20`) used by ASR to threshold artifact 
 _Avoid_: ASR threshold, ASR parameter
 
 **PipelineConfig**:
-A Python dataclass capturing all parameters needed to reproduce a pipeline run: IIR band edges and order, ASR backend/cutoff/calibration seconds, ORICA forgetting-factor profile and hyperparameters, and ICLabel threshold. Serialized to/from YAML. Saved alongside every benchmark output.
+A Python dataclass capturing all parameters needed to reproduce a pipeline run: IIR band edges and order, ASR backend/cutoff/calibration seconds, ORICA forgetting-factor profile and hyperparameters, ICLabel threshold, ICLabel run frequency (`classify_interval_s`, where `0` means every chunk), and benchmark simulation chunk size (`chunk_size`). Serialized to/from YAML. Saved alongside every benchmark output. The reference experiment config lives at `benchmarks/config/reference.yaml`.
 _Avoid_: config, settings, parameters
 
 **Batch runner**:
@@ -73,7 +73,7 @@ _Avoid_: bulk runner, dataset runner
 _Avoid_: cross-subject aggregation, multi-subject analysis
 
 **Classifier**:
-Any callable `(sources, mixing_matrix, sfreq) → artifact_mask` that identifies artifact ICs. `mixing_matrix` is `A = pinv(W × sphere)` — the mixing matrix mapping source space back to channel space. The default implementation uses ICLabel; any callable with this signature is valid.
+Any callable `(sources, mixing_matrix, sfreq) → artifact_mask` that identifies artifact ICs. `mixing_matrix` is `A = pinv(W × sphere)` — the mixing matrix mapping source space back to channel space. The default implementation (`ICLabelClassifier`) uses ICLabel; any callable with this signature is valid. `ICLabelClassifier` accepts both legacy label spellings (`'eog'`, `'ecg'`, `'ch_noise'`) and newer mne-icalabel aliases (`'eye'`, `'heart'`, `'channel_noise'`), and normalises EEGLAB-style uppercase channel names automatically.
 _Avoid_: IC labeler, artifact detector
 
 ### Streaming and evaluation

@@ -100,11 +100,12 @@ Reproduces the cross-subject IC source energy evaluation against the [NCTU-LKT d
 
 ```bash
 export PYORICA_NCTU_DATA=/path/to/dataset_2019_TBME
-python benchmarks/run_all_subjects.py --config config.yaml
+python benchmarks/run_all_subjects.py --config benchmarks/config/reference.yaml \
+                                      --ica-cache-dir benchmarks/ica_cache
 python benchmarks/aggregate_results.py --run-dir benchmarks/results/run_YYYYMMDD_HHMMSS
 ```
 
-Per-subject outputs include an IC source energy CSV and an IC class timeline plot showing how ORICA's online classifications evolve across the session. See [`benchmarks/README.md`](benchmarks/README.md) for the full workflow, output descriptions, and ICA caching options.
+`benchmarks/config/reference.yaml` is the reference experiment config (ORICA parameters matching the original MATLAB implementation). Per-subject outputs include an IC source energy CSV and an IC class timeline plot. See [`benchmarks/README.md`](benchmarks/README.md) for the full workflow, output descriptions, and ICA caching options.
 
 ## Project layout
 
@@ -115,7 +116,7 @@ pyorica/
   streaming/      # ArrayStream, LSLStream
   pipeline/       # EEGPipeline, ICLabelClassifier
   eval/           # loader, runner, analysis
-tests/            # pytest suite (53 fast tests + slow integration tests)
+tests/            # pytest suite (98 fast tests + slow integration tests)
 docs/
   adr/            # Architecture decision records
 CONTEXT.md        # Domain glossary and terminology

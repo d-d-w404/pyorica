@@ -32,19 +32,29 @@ dataset_2019_TBME/
 
 ---
 
-## Step 1 — (Optional) Generate a config file
+## Step 1 — Choose a config file
 
-All pipeline parameters are captured in a `PipelineConfig`. The defaults match the reference experiments:
+All pipeline parameters are captured in a `PipelineConfig` YAML. Use the reference config for results that match the original MATLAB ORICA implementation:
 
-| Parameter | Default | Notes |
-|-----------|---------|-------|
+```bash
+benchmarks/config/reference.yaml   # reference experiment parameters (recommended)
+```
+
+Key parameters in `reference.yaml`:
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
 | `asr_backend` | `asrpy` | matches `SN_Driveasrpy20_2min_70` reference |
 | `asr_cutoff` | `20.0` | SD multiplier |
 | `asr_calibration_seconds` | `120.0` | first 2 min of session |
+| `orica_lambda_0` | `0.00133` | initial forgetting factor ≈ steady-state λ (constant slow adaptation) |
+| `orica_tau_const` | `3.0` | steady-state λ = 1 − exp(−1/(3 × sfreq)) |
+| `orica_block_size_white/ica` | `32` | samples per ORICA update block |
 | `icalabel_threshold` | `0.7` | artifact rejection probability |
-| `iir_l_freq` / `iir_h_freq` | `1.0` / `50.0` | bandpass |
+| `classify_interval_s` | `0` | ICLabel every chunk |
+| `chunk_size` | `1000` | samples per simulated-real-time step |
 
-To generate a config file (and edit before running):
+To create a custom config based on current defaults:
 
 ```python
 from pyorica.config import PipelineConfig
@@ -56,10 +66,10 @@ PipelineConfig().to_yaml("my_config.yaml")
 ## Step 2 — Run all subjects
 
 ```bash
-python benchmarks/run_all_subjects.py [--config my_config.yaml] \
+python benchmarks/run_all_subjects.py --config benchmarks/config/reference.yaml \
+                                      --ica-cache-dir benchmarks/ica_cache \
                                       [--output-dir benchmarks/results] \
-                                      [--subjects s1 s3 s5] \
-                                      [--ica-cache-dir benchmarks/ica_cache]
+                                      [--subjects s1 s3 s5]
 ```
 
 **What it does:**
@@ -75,11 +85,11 @@ Offline ICA fitting is the dominant per-subject cost (~10–20 min each). Use `-
 
 ```bash
 # First run: fits ICA for each subject, writes cache
-python benchmarks/run_all_subjects.py --config config.yaml \
+python benchmarks/run_all_subjects.py --config benchmarks/config/reference.yaml \
     --ica-cache-dir benchmarks/ica_cache
 
 # Subsequent runs with different pipeline parameters: ICA load is instant
-python benchmarks/run_all_subjects.py --config config_v2.yaml \
+python benchmarks/run_all_subjects.py --config my_config.yaml \
     --ica-cache-dir benchmarks/ica_cache   # same cache dir, shared across runs
 ```
 
@@ -152,7 +162,7 @@ For development or debugging, run one subject directly:
 ```bash
 python benchmarks/run_validation.py --subjects s1 \
                                     --output-dir benchmarks/results/debug \
-                                    [--config my_config.yaml]
+                                    --config benchmarks/config/reference.yaml
 ```
 
 Produces `s1_ic_source_energy.csv` and `s1_ic_class_timeline.png` in the output directory.

@@ -20,7 +20,7 @@ class EEGPipeline:
     def __init__(self, n_channels, sfreq, l_freq=1.0, h_freq=50.0,
                  asr_backend="asrpy", asr_cutoff=20.0,
                  classifier=None, orica_kwargs=None, verbose=False,
-                 config=None, classify_interval_s=30.0):
+                 config=None, classify_interval_s=0.0):
         # config takes precedence over individual kwargs when provided
         if config is not None:
             l_freq = config.iir_l_freq
@@ -65,9 +65,12 @@ class EEGPipeline:
             _step.t0 = now
         _step.t0 = time.monotonic()
 
-        iir_calib = IIRFilter(self._n_channels, self._sfreq,
-                              l_freq=self._iir.l_freq, h_freq=self._iir.h_freq)
-        iir_filtered = iir_calib.process(calibration_data)
+        # Zero-phase filter for calibration: avoids startup transients that would
+        # bias ASR and ORICA warm-start. Matches ORICA's offline calibration practice.
+        from scipy.signal import sosfiltfilt
+        iir_filtered = sosfiltfilt(self._iir._sos,
+                                   np.asarray(calibration_data, dtype=np.float64),
+                                   axis=1)
         _step("IIR done")
 
         orica_input = iir_filtered

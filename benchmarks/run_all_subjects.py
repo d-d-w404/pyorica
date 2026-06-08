@@ -40,6 +40,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
 
 def _find_sessions(root: Path) -> list[Path]:
     sessions = sorted(root.glob("s*/s*_resampled.set"))
@@ -141,7 +152,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--output-dir", default="benchmarks/results",
-        help="Parent directory for run outputs (default: benchmarks/results).",
+        help="Parent directory for run outputs (default: benchmarks/results). "
+             "Ignored if --run-dir is given.",
+    )
+    parser.add_argument(
+        "--run-dir", metavar="PATH",
+        help="Full output directory for this run (no timestamp appended). "
+             "If it already exists, subjects with existing CSVs are skipped.",
     )
     parser.add_argument(
         "--subjects", nargs="*", metavar="SID",
@@ -224,8 +241,12 @@ def main() -> None:
                       "BLIS_NUM_THREADS", "OMP_NUM_THREADS"):
         os.environ[_blas_var] = "1"
 
-    run_tag = datetime.now().strftime("run_%Y%m%d_%H%M%S")
-    run_dir = Path(args.output_dir) / run_tag
+    if args.run_dir:
+        run_tag = Path(args.run_dir).name
+        run_dir = Path(args.run_dir)
+    else:
+        run_tag = datetime.now().strftime("run_%Y%m%d_%H%M%S")
+        run_dir = Path(args.output_dir) / run_tag
     run_dir.mkdir(parents=True, exist_ok=True)
     config.to_yaml(run_dir / "config.yaml")
 

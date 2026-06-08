@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import os
 
-from pyorica.orica.core import ORICAFilter
+from pyorica.orica.core import ORICAFilter, _orica_block_ranges
 
 RNG = np.random.default_rng(0)
 N_CH = 8
@@ -69,7 +69,39 @@ def test_fit_warm_start_differs_from_cold_start():
         "warm-started weights should differ from cold-started weights"
 
 
-# ── Cycle 5: wrong channel count raises ───────────────────────────────────
+# ── Cycle 5: block partitioning (legacy ORICA even split) ─────────────────
+
+def test_orica_block_ranges_examples_from_legacy():
+    """Spot-check against hand-computed legacy ORICA examples."""
+    assert list(_orica_block_ranges(50, 32)) == [(0, 50)]
+    assert list(_orica_block_ranges(100, 32)) == [(0, 33), (33, 66), (66, 100)]
+
+
+def test_orica_block_ranges_covers_all_samples():
+    """Every (n_pts, block_size) pair must cover exactly n_pts samples with no gaps."""
+    for n_pts in (8, 31, 32, 50, 100, 1000):
+        for block_size in (8, 32, 37, 63):
+            ranges = list(_orica_block_ranges(n_pts, block_size))
+            if n_pts < block_size:
+                assert ranges == []
+                continue
+            assert ranges[0][0] == 0
+            assert ranges[-1][1] == n_pts
+            covered = sum(end - start for start, end in ranges)
+            assert covered == n_pts
+            for (s0, e0), (s1, e1) in zip(ranges, ranges[1:]):
+                assert e0 == s1
+
+
+def test_update_processes_all_samples_when_chunk_not_multiple_of_block():
+    """update() must process all samples; _counter must advance by exactly n_pts."""
+    orica = ORICAFilter(N_CH, SFREQ, block_size_white=8, block_size_ica=8)
+    counter_before = orica._counter
+    orica.update(RNG.standard_normal((N_CH, 70)))
+    assert orica._counter - counter_before == 70
+
+
+# ── Cycle 6: wrong channel count raises ───────────────────────────────────
 
 def test_update_wrong_channels_raises():
     orica = ORICAFilter(N_CH, SFREQ)

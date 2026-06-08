@@ -33,6 +33,17 @@ import time
 from pathlib import Path
 from typing import Optional
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
 import numpy as np
 
 
@@ -89,7 +100,8 @@ def _make_mne_info(ch_names: list[str], sfreq: float):
 
 
 def run_subject(set_path: Path, config, out_dir: Path,
-                ica_cache_dir: Optional[Path] = None) -> Path:
+                ica_cache_dir: Optional[Path] = None,
+                max_seconds: Optional[float] = None) -> Path:
     """Run the full pipeline for one subject and write outputs to out_dir.
 
     Parameters
@@ -100,6 +112,9 @@ def run_subject(set_path: Path, config, out_dir: Path,
         Pipeline configuration (determines ASR backend, cutoff, ORICA params, etc.).
     out_dir : Path
         Directory to write {subject}_ic_source_energy.csv and config.yaml.
+    max_seconds : float, optional
+        If set, truncate the session to this many seconds before processing.
+        Useful for development iteration without waiting for full sessions.
 
     Returns
     -------
@@ -116,6 +131,13 @@ def run_subject(set_path: Path, config, out_dir: Path,
     data, sfreq, ch_names = _load_set(set_path)
     n_ch, n_samples = data.shape
 
+    if max_seconds is not None and max_seconds > 0:
+        max_samples = int(max_seconds * sfreq)
+        if max_samples < n_samples:
+            data = data[:, :max_samples]
+            n_samples = max_samples
+            print(f"[{subject}] truncated to {max_seconds:g} s ({n_samples} samples)")
+
     calib_samples = int(config.asr_calibration_seconds * sfreq)
     calibration = data[:, :calib_samples]
 
@@ -128,11 +150,12 @@ def run_subject(set_path: Path, config, out_dir: Path,
     pipeline = EEGPipeline(n_channels=n_ch, sfreq=sfreq,
                            classifier=classifier, verbose=True, config=config)
 
+    chunk_size = int(getattr(config, "chunk_size", CHUNK_SIZE) or CHUNK_SIZE)
     print(f"[{subject}] running pipeline (ASR={config.asr_backend}, "
           f"cutoff={config.asr_cutoff}, ICLabel threshold={config.icalabel_threshold}, "
-          f"chunk={CHUNK_SIZE} samples)...")
+          f"chunk={chunk_size} samples)...")
     t0 = time.monotonic()
-    result = run(pipeline, data, chunk_size=CHUNK_SIZE,
+    result = run(pipeline, data, chunk_size=chunk_size,
                  calibration_data=calibration, verbose=True,
                  label=subject)
     print(f"[{subject}] pipeline done  ({_fmt_seconds(time.monotonic() - t0)})")
@@ -193,6 +216,11 @@ def main() -> None:
         help="Directory for cached ICA objects (.fif/.pkl) and labels (.json). "
              "If a cache exists for a subject it is reused instead of re-fitting ICA.",
     )
+    parser.add_argument(
+        "--max-seconds", type=float, default=None, metavar="S",
+        help="Truncate each session to S seconds before processing. "
+             "Useful for quick iteration during development.",
+    )
     args = parser.parse_args()
 
     config = PipelineConfig.from_yaml(args.config) if args.config else PipelineConfig()
@@ -232,7 +260,8 @@ def main() -> None:
     errors = []
     for set_path in sessions:
         try:
-            run_subject(set_path, config, output_dir, ica_cache_dir=ica_cache_dir)
+            run_subject(set_path, config, output_dir, ica_cache_dir=ica_cache_dir,
+                        max_seconds=args.max_seconds)
         except Exception as exc:
             subject = set_path.parent.name
             print(f"[{subject}] ERROR: {exc}", file=sys.stderr)

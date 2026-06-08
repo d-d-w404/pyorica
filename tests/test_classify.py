@@ -107,7 +107,58 @@ def test_iclabel_integration_returns_valid_mask():
     assert mask.shape == (N_CH,)
 
 
-# ── Cycle 7 (regression #18): short chunk must not crash ─────────────────
+# ── Cycle 7: label aliases map alternate spellings to internal names ──────
+
+def test_label_alias_eye_equivalent_to_eog():
+    """artifact_labels={'eye'} must behave identically to {'eog'}."""
+    sources = RNG.standard_normal((N_CH, int(SFREQ * 4)))
+    A = np.eye(N_CH)
+    proba = _all_brain_proba(N_CH)
+    proba[1, 0] = 0.1
+    proba[1, 2] = 0.9  # eog (column 2) on IC 1
+
+    clf_old = ICLabelClassifier(_make_info(), artifact_labels={'eog'}, threshold=0.5)
+    clf_new = ICLabelClassifier(_make_info(), artifact_labels={'eye'}, threshold=0.5)
+
+    with patch.object(clf_old, '_get_probabilities', return_value=proba.copy()):
+        mask_old = clf_old(sources, A, SFREQ)
+    with patch.object(clf_new, '_get_probabilities', return_value=proba.copy()):
+        mask_new = clf_new(sources, A, SFREQ)
+
+    np.testing.assert_array_equal(mask_old, mask_new)
+
+
+def test_label_alias_heart_equivalent_to_ecg():
+    """artifact_labels={'heart'} must behave identically to {'ecg'}."""
+    sources = RNG.standard_normal((N_CH, int(SFREQ * 4)))
+    A = np.eye(N_CH)
+    proba = _all_brain_proba(N_CH)
+    proba[3, 0] = 0.1
+    proba[3, 3] = 0.9  # ecg (column 3) on IC 3
+
+    clf_old = ICLabelClassifier(_make_info(), artifact_labels={'ecg'}, threshold=0.5)
+    clf_new = ICLabelClassifier(_make_info(), artifact_labels={'heart'}, threshold=0.5)
+
+    with patch.object(clf_old, '_get_probabilities', return_value=proba.copy()):
+        mask_old = clf_old(sources, A, SFREQ)
+    with patch.object(clf_new, '_get_probabilities', return_value=proba.copy()):
+        mask_new = clf_new(sources, A, SFREQ)
+
+    np.testing.assert_array_equal(mask_old, mask_new)
+
+
+def test_channel_name_normalisation_uppercase():
+    """ICLabelClassifier must accept EEGLAB-style uppercase channel names (FP1, FZ)."""
+    upper_names = ['FP1', 'FZ', 'CZ', 'PZ', 'F3', 'F4', 'P3', 'P4']
+    info_upper = mne.create_info(upper_names, SFREQ, ch_types='eeg', verbose=False)
+    # Must not raise; channel names should be normalised internally
+    clf = ICLabelClassifier(info_upper)
+    assert 'Fp1' in clf._info['ch_names']
+    assert 'Fz' in clf._info['ch_names']
+    assert 'Cz' in clf._info['ch_names']
+
+
+# ── Cycle 8 (regression #18): short chunk must not crash ─────────────────
 
 def test_short_chunk_returns_no_artifacts_without_error():
     """Chunks shorter than the ICLabel FIR filter (~825 taps) must not crash.
