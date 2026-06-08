@@ -73,7 +73,7 @@ _Avoid_: bulk runner, dataset runner
 _Avoid_: cross-subject aggregation, multi-subject analysis
 
 **Classifier**:
-Any callable `(sources, mixing_matrix, sfreq) → artifact_mask` that identifies artifact ICs. `mixing_matrix` is `A = pinv(W × sphere)` — the mixing matrix mapping source space back to channel space. The default implementation uses ICLabel; any callable with this signature is valid.
+Any callable `(sources, mixing_matrix, sfreq) → artifact_mask` that identifies artifact ICs. `mixing_matrix` is `A = pinv(W × sphere)` — the mixing matrix mapping source space back to channel space. The default implementation (`ICLabelClassifier`) uses ICLabel; any callable with this signature is valid. `ICLabelClassifier` accepts both legacy label spellings (`'eog'`, `'ecg'`, `'ch_noise'`) and newer mne-icalabel aliases (`'eye'`, `'heart'`, `'channel_noise'`), and normalises EEGLAB-style uppercase channel names automatically.
 _Avoid_: IC labeler, artifact detector
 
 ### Streaming and evaluation
