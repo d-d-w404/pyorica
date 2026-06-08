@@ -150,10 +150,10 @@ def run_subject(set_path: Path, config, out_dir: Path,
     pipeline = EEGPipeline(n_channels=n_ch, sfreq=sfreq,
                            classifier=classifier, verbose=True, config=config)
 
+    chunk_size = int(getattr(config, "chunk_size", CHUNK_SIZE) or CHUNK_SIZE)
     print(f"[{subject}] running pipeline (ASR={config.asr_backend}, "
           f"cutoff={config.asr_cutoff}, ICLabel threshold={config.icalabel_threshold}, "
           f"chunk={chunk_size} samples)...")
-    chunk_size = int(getattr(config, "chunk_size", CHUNK_SIZE) or CHUNK_SIZE)
     t0 = time.monotonic()
     result = run(pipeline, data, chunk_size=chunk_size,
                  calibration_data=calibration, verbose=True,
