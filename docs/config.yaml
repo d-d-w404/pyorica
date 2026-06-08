@@ -32,3 +32,4 @@ orica_tau_const: 3           # local stationarity window (samples); .inf = globa
 # ICs with artifact probability above this threshold are zeroed.
 # Artifact classes: muscle, eye, heart, line noise, channel noise.
 icalabel_threshold: 0.7      # probability threshold ∈ [0, 1]
+classify_interval_s: 0       # seconds between ICLabel runs (0 = every chunk)

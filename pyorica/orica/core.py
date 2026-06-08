@@ -209,7 +209,8 @@ class ORICAFilter:
         """Run whitening + ICA block updates over data (n_channels, n_samples)."""
         n_pts = data.shape[1]
         block_size = min(self.block_size_white, self.block_size_ica)
-        n_blocks = n_pts // block_size
+        # ceil division so the remainder tail is always processed
+        n_blocks = (n_pts + block_size - 1) // block_size if n_pts > 0 else 0
 
         # centre data for whitening
         data_c = data - data.mean(axis=1, keepdims=True)

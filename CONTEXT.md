@@ -61,7 +61,7 @@ The standard-deviation multiplier (e.g. `20`) used by ASR to threshold artifact 
 _Avoid_: ASR threshold, ASR parameter
 
 **PipelineConfig**:
-A Python dataclass capturing all parameters needed to reproduce a pipeline run: IIR band edges and order, ASR backend/cutoff/calibration seconds, ORICA forgetting-factor profile and hyperparameters, and ICLabel threshold. Serialized to/from YAML. Saved alongside every benchmark output.
+A Python dataclass capturing all parameters needed to reproduce a pipeline run: IIR band edges and order, ASR backend/cutoff/calibration seconds, ORICA forgetting-factor profile and hyperparameters, ICLabel threshold, and ICLabel run frequency (`classify_interval_s`, where `0` means every chunk). Serialized to/from YAML. Saved alongside every benchmark output.
 _Avoid_: config, settings, parameters
 
 **Batch runner**:

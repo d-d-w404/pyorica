@@ -27,7 +27,7 @@ class PipelineConfig:
     # ICLabel
     icalabel_threshold: float = 0.7
     # Seconds between ICLabel runs in the online pipeline (0 = every chunk)
-    classify_interval_s: float = 30.0
+    classify_interval_s: float = 0.0
 
     def to_yaml(self, path: Union[str, Path]) -> None:
         """Write an annotated, human-readable YAML file.

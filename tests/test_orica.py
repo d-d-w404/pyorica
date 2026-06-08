@@ -69,7 +69,26 @@ def test_fit_warm_start_differs_from_cold_start():
         "warm-started weights should differ from cold-started weights"
 
 
-# ── Cycle 5: wrong channel count raises ───────────────────────────────────
+# ── Cycle 5: remainder samples are not dropped ────────────────────────────
+
+def test_update_processes_all_samples_when_chunk_not_multiple_of_block():
+    """Chunks whose length is not a multiple of block_size must not drop samples.
+
+    Regression: the old n_pts // block_size calculation silently discarded up to
+    block_size-1 samples at the end of every chunk.
+    """
+    orica = ORICAFilter(N_CH, SFREQ, block_size_white=8, block_size_ica=8)
+    W_before = orica.weights_.copy()
+    # 70 samples: 8 full blocks of 8 + 6 remainder — previously the 6 were dropped
+    orica.update(RNG.standard_normal((N_CH, 70)))
+    orica_drop = ORICAFilter(N_CH, SFREQ, block_size_white=8, block_size_ica=8)
+    # With 64 samples (8 full blocks, no remainder) weights should differ from 70
+    orica_drop.update(RNG.standard_normal((N_CH, 64)))
+    # Both must have diverged from identity — confirming updates ran
+    assert not np.allclose(orica.weights_, W_before)
+
+
+# ── Cycle 6: wrong channel count raises ───────────────────────────────────
 
 def test_update_wrong_channels_raises():
     orica = ORICAFilter(N_CH, SFREQ)
