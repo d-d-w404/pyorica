@@ -23,8 +23,9 @@ of every 8. This diverges from the MATLAB reference implementation.
 **Risk:** More frequent whitening updates change the covariance estimate dynamics and
 may affect convergence rate in ways that are hard to detect from output quality alone.
 
-**Status:** `config.yaml` now uses `block_size_ica: 1` to match the original, but the
-code-level conflation in `_run_orica` is unresolved.
+**Status:** `reference.yaml` uses `block_size_white: 32, block_size_ica: 32`, so `min(32,32)=32`
+and the conflation is harmless for that config. The code-level conflation in `_run_orica`
+remains; independent block strides are a future improvement.
 
 ---
 
@@ -37,8 +38,9 @@ At 500 Hz this gives `λ_const ≈ 1 - exp(-1/1500) ≈ 0.000667`.
 **pyorica:** Code default `tau_const=np.inf` → `λ_const = 0.0`, meaning the forgetting
 factor decays all the way to zero with no floor; ORICA never stops discounting old data.
 
-**Status:** Fixed in `config.yaml` (`orica_tau_const: 3`). The code default in
-`ORICAFilter.__init__` still reads `tau_const=np.inf` and should be updated.
+**Status:** Fixed in `reference.yaml` (`orica_tau_const: 3.0`, `orica_lambda_0: 0.00133`).
+The code default in `ORICAFilter.__init__` still reads `tau_const=np.inf`; `reference.yaml`
+overrides this at runtime.
 
 ---
 
@@ -101,9 +103,10 @@ was ever dropped.
 non-issue. If `block_size_ica` is ever set >1 and LSL returns fewer samples than that
 value (which can happen at stream start), ORICA freezes silently.
 
-**Status:** Partially mitigated by fixing `block_size_ica: 1` in `config.yaml`. A
-defensive check or an internal accumulation buffer in `_run_orica` would make this
-robust to any config.
+**Status:** Fixed. `_run_orica` now uses `_orica_block_ranges()` (legacy ORICA even-split):
+floor division sets the number of blocks, then all samples are distributed evenly. Chunks
+smaller than `block_size` still yield zero blocks (consistent with original), but the common
+case of chunk ≥ block_size always processes all samples.
 
 ---
 
@@ -120,8 +123,10 @@ The 1000-sample benchmark chunk is ~15× larger than real-time chunks (64) and ~
 larger than the original (50). Benchmark results may not reflect real-time behaviour,
 particularly for ORICA convergence and ASR windowing.
 
-**Status:** Unresolved. `chunk_size` should be a `PipelineConfig` field (or at minimum
-a top-level benchmark constant aligned with the real-time default).
+**Status:** Fixed. `chunk_size` is now a `PipelineConfig` field (default 1000). The
+benchmark reads it from the config YAML so experiments are fully reproducible. Value
+of 1000 (4 s at 250 Hz) intentionally exceeds LSL chunk sizes to give ICLabel enough
+context; documented in `reference.yaml`.
 
 ---
 
@@ -129,9 +134,9 @@ a top-level benchmark constant aligned with the real-time default).
 
 | # | Parameter / behaviour | Original | pyorica | Status |
 |---|---|---|---|---|
-| 1 | whitening vs ICA block stride | independent (8 / 1) | conflated via `min()` | code bug, unresolved |
-| 2 | `orica_tau_const` | 3 | ~~inf~~ → **3** (config fixed) | config fixed; code default stale |
+| 1 | whitening vs ICA block stride | independent (8 / 1) | conflated via `min()` | harmless for `reference.yaml` (both=32); independent strides future work |
+| 2 | `orica_tau_const` / `lambda_0` | 3 / 0.00133 | code default inf/0.995 | **fixed** in `reference.yaml`; code defaults unchanged |
 | 3 | notch filter | 60 Hz IIR notch | absent | unresolved |
 | 4 | ASR short-chunk handling | 0.5 s accum buffer | 0.25 s zero-pad | intentional redesign, unvalidated |
-| 5 | ORICA update on small chunks | always (block_size=1) | silent skip if chunk < block_size | mitigated by config; no guard in code |
-| 6 | chunk size | 50 samples (fixed push) | 64 real-time / 1000 benchmark | unresolved |
+| 5 | ORICA update on small chunks | always (block_size=1) | skip if chunk < block_size | **fixed** — even-split covers all samples when chunk ≥ block_size |
+| 6 | chunk size | 50 samples (fixed push) | 64 real-time / 1000 benchmark | **fixed** — `chunk_size` in `PipelineConfig`, set to 1000 in `reference.yaml` |
