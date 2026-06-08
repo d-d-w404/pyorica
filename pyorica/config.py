@@ -28,6 +28,8 @@ class PipelineConfig:
     icalabel_threshold: float = 0.7
     # Seconds between ICLabel runs in the online pipeline (0 = every chunk)
     classify_interval_s: float = 0.0
+    # Benchmark simulation chunk size (samples per pipeline step)
+    chunk_size: int = 1000
 
     def to_yaml(self, path: Union[str, Path]) -> None:
         """Write an annotated, human-readable YAML file.
@@ -72,15 +74,21 @@ class PipelineConfig:
             "# Artifact classes: muscle, eye, heart, line noise, channel noise.",
             f"icalabel_threshold: {self.icalabel_threshold}      # probability threshold ∈ [0, 1]",
             f"classify_interval_s: {self.classify_interval_s}     # seconds between ICLabel runs (0 = every chunk)",
+            "",
+            "# ── Benchmark simulation ─────────────────────────────────────────────",
+            f"chunk_size: {self.chunk_size}             # samples per pipeline step in simulated real-time",
         ]
         Path(path).write_text("\n".join(lines) + "\n")
 
     @classmethod
     def from_yaml(cls, path: Union[str, Path]) -> "PipelineConfig":
         """Load config from a YAML file (annotated or plain)."""
+        import dataclasses
         import yaml
         with open(path) as f:
             d = yaml.safe_load(f)
         if d.get("orica_tau_const") == ".inf":
             d["orica_tau_const"] = float("inf")
+        known = {f.name for f in dataclasses.fields(cls)}
+        d = {k: v for k, v in d.items() if k in known}
         return cls(**d)

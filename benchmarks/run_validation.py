@@ -152,9 +152,10 @@ def run_subject(set_path: Path, config, out_dir: Path,
 
     print(f"[{subject}] running pipeline (ASR={config.asr_backend}, "
           f"cutoff={config.asr_cutoff}, ICLabel threshold={config.icalabel_threshold}, "
-          f"chunk={CHUNK_SIZE} samples)...")
+          f"chunk={chunk_size} samples)...")
+    chunk_size = int(getattr(config, "chunk_size", CHUNK_SIZE) or CHUNK_SIZE)
     t0 = time.monotonic()
-    result = run(pipeline, data, chunk_size=CHUNK_SIZE,
+    result = run(pipeline, data, chunk_size=chunk_size,
                  calibration_data=calibration, verbose=True,
                  label=subject)
     print(f"[{subject}] pipeline done  ({_fmt_seconds(time.monotonic() - t0)})")

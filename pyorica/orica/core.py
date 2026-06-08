@@ -11,6 +11,26 @@ Engineering, 24(3), 309-319.
 import numpy as np
 
 
+def _orica_block_ranges(n_pts: int, block_size: int):
+    """Yield (start, end) sample ranges for one ORICA update pass.
+
+    Matches legacy ORICA (``ORICA_final_no_print_quick30.py``):
+
+    * ``n_splits = n_pts // block_size`` (floor)
+    * partition ``[0, n_pts)`` into ``n_splits`` contiguous segments of
+      nearly equal length (e.g. 100 pts / block_size 32 → 33+33+34)
+    * when ``n_pts < block_size``, ``n_splits == 0`` and nothing is yielded
+    """
+    if block_size <= 0:
+        raise ValueError(f"block_size must be > 0, got {block_size}")
+    n_splits = n_pts // block_size
+    for bi in range(n_splits):
+        start = int(bi * n_pts / n_splits)
+        end = min(n_pts, int((bi + 1) * n_pts / n_splits))
+        if start < end:
+            yield start, end
+
+
 class ORICAFilter:
     """Online Recursive ICA with RLS whitening.
 
@@ -209,8 +229,6 @@ class ORICAFilter:
         """Run whitening + ICA block updates over data (n_channels, n_samples)."""
         n_pts = data.shape[1]
         block_size = min(self.block_size_white, self.block_size_ica)
-        # ceil division so the remainder tail is always processed
-        n_blocks = (n_pts + block_size - 1) // block_size if n_pts > 0 else 0
 
         # centre data for whitening
         data_c = data - data.mean(axis=1, keepdims=True)
@@ -229,9 +247,7 @@ class ORICAFilter:
             _ctx = None
 
         try:
-            for bi in range(n_blocks):
-                start = bi * block_size
-                end = min(n_pts, (bi + 1) * block_size)
+            for start, end in _orica_block_ranges(n_pts, block_size):
                 data_range = np.arange(start, end) + 1  # 1-indexed, matches MATLAB
                 block = data_c[:, start:end]
 
