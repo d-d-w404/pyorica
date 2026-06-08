@@ -113,7 +113,51 @@ def test_ic_field_is_sequential_index():
     assert [row['ic'] for row in result] == list(range(N_CH))
 
 
-# ── Cycle 6 (slow): integration with real MNE ICA + ICLabel ──────────────
+# ── Cycle 6: exclude_lead_seconds skips calibration window in MS stats ───
+
+def _run_with_mock(iir, asr, orica, **kwargs):
+    with patch('pyorica.eval.ica_analysis._fit_ica') as mock_fit, \
+         patch('pyorica.eval.ica_analysis._label_ica') as mock_label:
+        mock_fit.return_value = _mock_ica(N_CH)
+        mock_label.return_value = ['other'] * N_CH
+        return ic_source_energy(iir, asr, orica, CH_NAMES, SFREQ, **kwargs)
+
+
+def test_exclude_lead_seconds_changes_ms_stats():
+    """Excluding lead-in samples must produce different MS values than using all data."""
+    iir, asr, orica = _make_stages()
+    # inject a large transient in the first 5 s (the "calibration lead-in")
+    spike_end = int(SFREQ * 5)
+    iir_spike = iir.copy()
+    iir_spike[:, :spike_end] += 100.0
+
+    result_all = _run_with_mock(iir_spike, asr, orica)
+    result_skip = _run_with_mock(iir_spike, asr, orica, exclude_lead_seconds=5.0)
+
+    # skipping the spike-contaminated lead-in must reduce ms_iir
+    ms_all = sum(r['ms_iir'] for r in result_all)
+    ms_skip = sum(r['ms_iir'] for r in result_skip)
+    assert ms_skip < ms_all
+
+
+def test_exclude_lead_seconds_zero_matches_default():
+    """exclude_lead_seconds=0 must be identical to the default (no exclusion)."""
+    iir, asr, orica = _make_stages()
+    result_default = _run_with_mock(iir, asr, orica)
+    result_zero = _run_with_mock(iir, asr, orica, exclude_lead_seconds=0.0)
+    for r1, r2 in zip(result_default, result_zero):
+        assert r1['ms_iir'] == r2['ms_iir']
+        assert r1['ms_orica'] == r2['ms_orica']
+
+
+def test_exclude_lead_seconds_too_large_raises():
+    """exclude_lead_seconds >= recording length must raise ValueError."""
+    iir, asr, orica = _make_stages()
+    with pytest.raises(ValueError, match="leaves no samples"):
+        _run_with_mock(iir, asr, orica, exclude_lead_seconds=9999.0)
+
+
+# ── Cycle 7 (slow): integration with real MNE ICA + ICLabel ──────────────
 
 @pytest.mark.slow
 @pytest.mark.filterwarnings("ignore:The data has not been high-pass filtered:RuntimeWarning")
