@@ -67,7 +67,7 @@ class PipelineConfig:
             f"orica_lambda_0: {self.orica_lambda_0}       # initial forgetting factor λ₀ ∈ (0, 1)",
             f"orica_gamma: {self.orica_gamma}           # cooling decay rate (used when ff_profile=cooling)",
             f"orica_num_subgaussian: {self.orica_num_subgaussian}    # ICs assumed sub-Gaussian (0 = all super-Gaussian)",
-            f"orica_tau_const: {tau}        # local stationarity window (samples); .inf = global",
+            f"orica_tau_const: {tau}        # local stationarity window (seconds); steady-state λ = 1-exp(-1/(tau×sfreq)); .inf = global",
             "",
             "# ── ICLabel artifact classifier ─────────────────────────────────────",
             "# ICs with artifact probability above this threshold are zeroed.",

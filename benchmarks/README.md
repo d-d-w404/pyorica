@@ -125,7 +125,7 @@ benchmarks/results/run_20260527_120000/
 Generated automatically alongside each CSV. Shows how ORICA's online IC classifications evolve across the session:
 
 - **X-axis** — IC index in fixed ORICA unmixing-matrix order (never reordered between snapshots)
-- **Y-axis** — time in seconds; one row per ICLabel classification event (every `classify_interval_s`, default 30 s)
+- **Y-axis** — time in seconds; one row per ICLabel classification event (every `classify_interval_s` seconds; `0` = every chunk, which is the default in `reference.yaml`)
 - **Cell color** — top-1 ICLabel class using the MNE-icalabel color convention (brain=blue, muscle=red, eog=green, ecg=pink, line\_noise=yellow, ch\_noise=orange, other=gray)
 
 The plot reflects the live ORICA weights at each snapshot, not a post-hoc offline ICA.
