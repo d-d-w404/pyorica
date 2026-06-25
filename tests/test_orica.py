@@ -85,8 +85,9 @@ def test_update_mutates_weights():
 def test_fit_warm_start_differs_from_cold_start():
     calibration = RNG.standard_normal((N_CH, int(SFREQ * 10)))  # 10 s
 
-    cold = ORICAFilter(N_CH, SFREQ)
-    warm = ORICAFilter(N_CH, SFREQ)
+    # tau_const=3 matches quick30 / benchmark defaults (stable constant-λ floor)
+    cold = ORICAFilter(N_CH, SFREQ, tau_const=3.0, block_size_white=32, block_size_ica=32)
+    warm = ORICAFilter(N_CH, SFREQ, tau_const=3.0, block_size_white=32, block_size_ica=32)
     warm.fit(calibration)
 
     # after the same subsequent updates, weights should differ
@@ -155,14 +156,14 @@ def test_cross_talk_error_on_sim_stat():
     data, A_true, sfreq = _load_sim_dataset()
     n_ch = data.shape[0]
 
-    # params matching testScript.m: online whitening, block=8, cooling, localstat=Inf
+    # quick30-compatible params (tau_const=3 → stable lambda_const floor)
     orica = ORICAFilter(
         n_components=n_ch,
         sfreq=sfreq,
         ff_profile="cooling",
         block_size_white=8,
         block_size_ica=8,
-        tau_const=np.inf,
+        tau_const=3.0,
         gamma=0.6,
         lambda_0=0.995,
     )
