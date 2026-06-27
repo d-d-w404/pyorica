@@ -149,7 +149,11 @@ class ICLabelClassifier:
 
         ica = self._make_ica(mixing_matrix, n_components, n_channels, n_samples)
         features = get_iclabel_features(raw, ica)
-        return run_iclabel(*features, backend=None)
+        try:
+            return run_iclabel(*features, backend=None)
+        except TypeError:
+            # mne-icalabel < 0.6 has no backend= kwarg
+            return run_iclabel(*features)
 
     def _make_ica(self, mixing_matrix, n_components, n_channels, n_samples):
         """Construct a fitted-looking MNE ICA from the ORICA mixing matrix."""
