@@ -78,14 +78,14 @@ class PipelineConfig:
             "# ── Benchmark simulation ─────────────────────────────────────────────",
             f"chunk_size: {self.chunk_size}             # samples per pipeline step in simulated real-time",
         ]
-        Path(path).write_text("\n".join(lines) + "\n")
+        Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     @classmethod
     def from_yaml(cls, path: Union[str, Path]) -> "PipelineConfig":
         """Load config from a YAML file (annotated or plain)."""
         import dataclasses
         import yaml
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             d = yaml.safe_load(f)
         if d.get("orica_tau_const") == ".inf":
             d["orica_tau_const"] = float("inf")
