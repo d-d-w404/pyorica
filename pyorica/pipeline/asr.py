@@ -69,7 +69,13 @@ class ASRAdapter:
     # ── asrpy ────────────────────────────────────────────────────────────────
 
     def _fit_asrpy(self, data: np.ndarray) -> None:
-        import vendor_asrpy
+        try:
+            import vendor_asrpy
+        except ImportError as exc:
+            raise ImportError(
+                "vendor_asrpy is required for backend='asrpy'. "
+                "Install it with: pip install pyorica[pipeline]"
+            ) from exc
         try:
             import mne
         except ImportError as exc:
