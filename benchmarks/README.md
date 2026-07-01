@@ -6,11 +6,22 @@ Three-step workflow to reproduce the cross-session artifact-reduction results.
 
 ## Prerequisites
 
-Install the full dependency set:
+Run the setup script from the repo root to create a `.venv` and install the full dependency set (including `asrpy`, the default ASR backend):
 
 ```bash
-pip install -e ".[full]"
-pip install asrpy      # ASR default backend (not yet on PyPI — install from source)
+python setup_env.py
+```
+
+Then activate the environment before running any benchmark script:
+
+```bash
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+```
+
+To also install dev tools (pytest, ruff) for running the test suite:
+
+```bash
+python setup_env.py --dev
 ```
 
 Set the dataset path:

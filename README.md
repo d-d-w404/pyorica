@@ -96,7 +96,7 @@ print(summarize(result))
 
 ### NCTU-LKT benchmark
 
-Reproduces the cross-subject IC source energy evaluation against the [NCTU-LKT dataset](https://ieeexplore.ieee.org/document/8768041). **Prerequisites:** `pip install pyorica[full]` and the dataset downloaded locally.
+Reproduces the cross-subject IC source energy evaluation against the [NCTU-LKT dataset](https://ieeexplore.ieee.org/document/8768041). **Prerequisites:** run `python setup_env.py` (see [`benchmarks/README.md`](benchmarks/README.md) for details) and download the dataset locally.
 
 ```bash
 export PYORICA_NCTU_DATA=/path/to/dataset_2019_TBME
