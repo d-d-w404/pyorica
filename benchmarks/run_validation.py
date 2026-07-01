@@ -7,7 +7,7 @@ Usage
 -----
     export PYORICA_NCTU_DATA=/path/to/dataset_2019_TBME
     python benchmarks/run_validation.py [--subjects s1 s3 ...] [--output-dir results]
-                                        [--config config.yaml]
+                                        [--config config.yaml] [--save-stages]
 
 Environment
 -----------
@@ -19,6 +19,9 @@ Output
 ------
 One CSV per subject at ``{output_dir}/s{N}_ic_source_energy.csv`` with columns:
     ic, label, ms_iir, ms_asr, ms_orica, pct_asr, pct_orica
+
+With ``--save-stages``, also writes ``{output_dir}/{subject}_stages.npz`` with
+full-session arrays: ``raw``, ``iir``, ``asr``, ``orica`` (ORICA + ICLabel output).
 
 A ``config.yaml`` capturing all pipeline parameters is also written to output_dir.
 """
@@ -86,6 +89,21 @@ def _load_set(path: Path) -> tuple[np.ndarray, float, list[str]]:
     return data, sfreq, ch_names
 
 
+def _save_pipeline_stages(path: Path, result, sfreq: float) -> None:
+    """Write full-session pipeline stage arrays to a compressed .npz file."""
+    if result.raw is None or result.iir is None or result.asr is None:
+        raise RuntimeError("Stage arrays missing — run() must be called with verbose=True.")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        path,
+        raw=result.raw,
+        iir=result.iir,
+        asr=result.asr,
+        orica=result.output,
+        sfreq=np.array(sfreq),
+    )
+
+
 def _make_mne_info(ch_names: list[str], sfreq: float):
     """Build an MNE Info with standard_1020 montage, normalizing channel name case."""
     import mne
@@ -101,7 +119,8 @@ def _make_mne_info(ch_names: list[str], sfreq: float):
 
 def run_subject(set_path: Path, config, out_dir: Path,
                 ica_cache_dir: Optional[Path] = None,
-                max_seconds: Optional[float] = None) -> Path:
+                max_seconds: Optional[float] = None,
+                save_stages: bool = False) -> Path:
     """Run the full pipeline for one subject and write outputs to out_dir.
 
     Parameters
@@ -159,6 +178,11 @@ def run_subject(set_path: Path, config, out_dir: Path,
                  calibration_data=calibration, verbose=True,
                  label=subject)
     print(f"[{subject}] pipeline done  ({_fmt_seconds(time.monotonic() - t0)})")
+
+    if save_stages:
+        stages_path = out_dir / f"{subject}_stages.npz"
+        _save_pipeline_stages(stages_path, result, sfreq)
+        print(f"[{subject}] written → {stages_path}")
 
     print(f"[{subject}] running offline ICA analysis...")
     t0 = time.monotonic()
@@ -221,6 +245,11 @@ def main() -> None:
         help="Truncate each session to S seconds before processing. "
              "Useful for quick iteration during development.",
     )
+    parser.add_argument(
+        "--save-stages", action="store_true",
+        help="Save full-session pipeline stage arrays (raw, iir, asr, orica) as "
+             "{subject}_stages.npz in --output-dir (same folder as the CSV).",
+    )
     args = parser.parse_args()
 
     config = PipelineConfig.from_yaml(args.config) if args.config else PipelineConfig()
@@ -261,7 +290,7 @@ def main() -> None:
     for set_path in sessions:
         try:
             run_subject(set_path, config, output_dir, ica_cache_dir=ica_cache_dir,
-                        max_seconds=args.max_seconds)
+                        max_seconds=args.max_seconds, save_stages=args.save_stages)
         except Exception as exc:
             subject = set_path.parent.name
             print(f"[{subject}] ERROR: {exc}", file=sys.stderr)
