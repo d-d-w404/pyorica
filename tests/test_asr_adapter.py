@@ -23,10 +23,9 @@ def test_invalid_backend_raises():
         ASRAdapter(backend="bogus", sfreq=SFREQ)
 
 
-# ── Cycle 3: asrpy backend fits and transforms (skip if not installed) ───
+# ── Cycle 3: asrpy backend (vendor_asrpy) fits and transforms ────────────
 
 def test_asrpy_backend_fits_and_transforms():
-    pytest.importorskip("asrpy")
     from pyorica.pipeline.asr import ASRAdapter
     calib = _eeg_like(int(SFREQ * 30))
     adapter = ASRAdapter(backend="asrpy", sfreq=SFREQ, cutoff=20.0)
@@ -38,7 +37,6 @@ def test_asrpy_backend_fits_and_transforms():
 
 def test_asrpy_transform_preserves_state_across_chunks():
     """Stateful R/Zi/cov should persist — transform must not error on repeated calls."""
-    pytest.importorskip("asrpy")
     from pyorica.pipeline.asr import ASRAdapter
     calib = _eeg_like(int(SFREQ * 30))
     adapter = ASRAdapter(backend="asrpy", sfreq=SFREQ, cutoff=20.0)

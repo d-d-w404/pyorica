@@ -6,11 +6,22 @@ Three-step workflow to reproduce the cross-session artifact-reduction results.
 
 ## Prerequisites
 
-Install the full dependency set:
+Run the setup script from the repo root to create a `.venv` and install the full dependency set (the default ASR backend, `asrpy`, ships as pyorica's bundled `vendor_asrpy` fork — see [ADR-0005](../docs/adr/0005-vendor-asrpy-fork.md) — so no separate install is needed):
 
 ```bash
-pip install -e ".[full]"
-pip install asrpy      # ASR default backend (not yet on PyPI — install from source)
+python setup_env.py
+```
+
+Then activate the environment before running any benchmark script:
+
+```bash
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+```
+
+To also install dev tools (pytest, ruff) for running the test suite:
+
+```bash
+python setup_env.py --dev
 ```
 
 Set the dataset path:
@@ -125,7 +136,7 @@ benchmarks/results/run_20260527_120000/
 Generated automatically alongside each CSV. Shows how ORICA's online IC classifications evolve across the session:
 
 - **X-axis** — IC index in fixed ORICA unmixing-matrix order (never reordered between snapshots)
-- **Y-axis** — time in seconds; one row per ICLabel classification event (every `classify_interval_s`, default 30 s)
+- **Y-axis** — time in seconds; one row per ICLabel classification event (every `classify_interval_s` seconds; `0` = every chunk, which is the default in `reference.yaml`)
 - **Cell color** — top-1 ICLabel class using the MNE-icalabel color convention (brain=blue, muscle=red, eog=green, ecg=pink, line\_noise=yellow, ch\_noise=orange, other=gray)
 
 The plot reflects the live ORICA weights at each snapshot, not a post-hoc offline ICA.

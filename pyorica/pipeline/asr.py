@@ -69,13 +69,7 @@ class ASRAdapter:
     # ── asrpy ────────────────────────────────────────────────────────────────
 
     def _fit_asrpy(self, data: np.ndarray) -> None:
-        try:
-            import asrpy
-        except ImportError as exc:
-            raise ImportError(
-                "asrpy is required for backend='asrpy'. "
-                "Install it with: pip install asrpy"
-            ) from exc
+        import vendor_asrpy
         try:
             import mne
         except ImportError as exc:
@@ -87,12 +81,7 @@ class ASRAdapter:
         ch_names = [f"EEG{i:03d}" for i in range(n_ch)]
         info = mne.create_info(ch_names, sfreq=float(self._sfreq),
                                ch_types="eeg", verbose=False)
-        asr = asrpy.ASR(sfreq=float(self._sfreq), cutoff=float(self._cutoff))
-        # asrpy block_covariance has an off-by-one when (n_samples - 2) % blocksize == 0;
-        # trimming one sample avoids the bug with negligible effect on calibration.
-        blocksize = getattr(asr, "blocksize", 100)
-        if data.shape[1] >= 3 and (data.shape[1] - 2) % blocksize == 0:
-            data = data[:, :-1]
+        asr = vendor_asrpy.ASR(sfreq=float(self._sfreq), cutoff=float(self._cutoff))
         raw = mne.io.RawArray(data, info, verbose=False)
         try:
             from threadpoolctl import threadpool_limits
@@ -112,7 +101,7 @@ class ASRAdapter:
         self._asr_cov = None
 
     def _transform_asrpy(self, chunk: np.ndarray) -> np.ndarray:
-        from asrpy.asr import asr_process
+        from vendor_asrpy.asr import asr_process
         asr = self._asr_inst
         n_ch, n_samples = chunk.shape
         lookahead = 0.25          # seconds; matches original ORICA receiver
