@@ -39,6 +39,8 @@ eval = [
     "mne>=1.6",
     "mne-icalabel>=0.6",
     "matplotlib>=3.7",
+    "onnxruntime>=1.15",   # mne-icalabel's ICLabel network needs torch or onnxruntime;
+                            # onnxruntime is the lighter of the two.
 ]
 dev = [
     "pytest>=8.0",
