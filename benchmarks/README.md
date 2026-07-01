@@ -6,7 +6,7 @@ Three-step workflow to reproduce the cross-session artifact-reduction results.
 
 ## Prerequisites
 
-Run the setup script from the repo root to create a `.venv` and install the full dependency set (including `asrpy`, the default ASR backend):
+Run the setup script from the repo root to create a `.venv` and install the full dependency set (the default ASR backend, `asrpy`, ships as pyorica's bundled `vendor_asrpy` fork — see [ADR-0005](../docs/adr/0005-vendor-asrpy-fork.md) — so no separate install is needed):
 
 ```bash
 python setup_env.py

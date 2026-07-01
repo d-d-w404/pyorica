@@ -30,7 +30,6 @@ dependencies = [
 [project.optional-dependencies]
 lsl = ["pylsl>=1.16"]
 pipeline = [
-    "asrpy>=0.0.8",
     "meegkit>=0.1.7",
     "mne>=1.6",
     "pyyaml>=6.0",
@@ -63,13 +62,16 @@ markers = ["slow: marks tests that require full dataset runs (deselect with -m '
 filterwarnings = [
     # meegkit internal NumPy scalar-from-array deprecation — upstream issue, not ours
     "ignore::DeprecationWarning:meegkit",
-    # asrpy internal NumPy scalar-from-array deprecation and divide-by-zero on zero input
-    "ignore::DeprecationWarning:asrpy",
-    "ignore::RuntimeWarning:asrpy",
+    # vendor_asrpy: divide-by-zero on zero input, unrelated to the numpy2 fix
+    "ignore::DeprecationWarning:vendor_asrpy",
+    "ignore::RuntimeWarning:vendor_asrpy",
 ]
 
 [tool.hatch.build.targets.sdist]
 exclude = ["tests/data/**"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["pyorica", "vendor_asrpy"]
 
 [tool.ruff]
 line-length = 88

@@ -53,8 +53,12 @@ A preprocessing stage that removes gross transient artifacts from EEG before ORI
 _Avoid_: artifact removal, cleaning
 
 **ASR backend**:
-The library used to implement ASR — either `"asrpy"` (default; matches reference experiments) or `"meegkit"` (alternative for comparison). Recorded in `PipelineConfig.asr_backend`.
+The library used to implement ASR — either `"asrpy"` (default; matches reference experiments) or `"meegkit"` (alternative for comparison). Recorded in `PipelineConfig.asr_backend`. `"asrpy"` runs on `vendor_asrpy`, a vendored, patched fork of the unmaintained `DiGyt/asrpy` (see [ADR-0005](docs/adr/0005-vendor-asrpy-fork.md)) — the config value names the algorithm/interface, not the package providing it.
 _Avoid_: ASR library, ASR implementation
+
+**vendor_asrpy**:
+A vendored, patched fork of `DiGyt/asrpy` 0.0.8, bundled as a second top-level importable package in the same wheel as `pyorica`. Fixes NumPy ≥2 incompatibilities (e.g. `int()` on size-1 ndarrays) that are unfixed upstream, and folds in the `block_covariance` off-by-one workaround `ASRAdapter` previously applied externally. See [ADR-0005](docs/adr/0005-vendor-asrpy-fork.md).
+_Avoid_: forked asrpy, patched asrpy, asrpy fork
 
 **ASR cutoff**:
 The standard-deviation multiplier (e.g. `20`) used by ASR to threshold artifact subspaces. Higher values = less aggressive cleaning.
