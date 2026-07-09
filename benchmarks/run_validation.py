@@ -197,6 +197,8 @@ def run_subject(set_path: Path, config, out_dir: Path,
         ch_names, sfreq,
         cache_dir=ica_cache_dir,
         subject=subject,
+        l_freq=config.iir_l_freq,
+        h_freq=config.iir_h_freq,
     )
 
     print(f"[{subject}] ICA analysis done  ({_fmt_seconds(time.monotonic() - t0)})")
