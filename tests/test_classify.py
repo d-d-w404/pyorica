@@ -243,9 +243,9 @@ def test_run_icalabel_normalises_uppercase_channel_names():
     assert 'Pz' in captured['ch_names']
 
 
-# ── Cycle 8: apply_car_bandpass toggles CAR only (no bandpass) ─────────────
+# ── Cycle 8: apply_car_bandpass toggles CAR + 1-100 Hz filtering ────────────
 
-def test_apply_car_bandpass_true_applies_car_but_not_filter():
+def test_apply_car_bandpass_true_applies_car_and_filter():
     clf = ICLabelClassifier(_make_info(), apply_car_bandpass=True)
     data = _chunk()
     unmixing = np.eye(N_CH)
@@ -263,11 +263,11 @@ def test_apply_car_bandpass_true_applies_car_but_not_filter():
         clf._run_icalabel(data, unmixing, mixing, SFREQ, N_CH)
 
     assert captured['custom_ref_applied'] != 0
-    assert captured['highpass'] == 0.0
-    assert captured['lowpass'] == pytest.approx(SFREQ / 2)
+    assert captured['highpass'] == pytest.approx(1.0)
+    assert captured['lowpass'] == pytest.approx(100.0)
 
 
-def test_apply_car_bandpass_false_skips_car():
+def test_apply_car_bandpass_false_skips_car_and_filter():
     clf = ICLabelClassifier(_make_info(), apply_car_bandpass=False)
     data = _chunk()
     unmixing = np.eye(N_CH)
@@ -289,7 +289,7 @@ def test_apply_car_bandpass_false_skips_car():
 
 def test_apply_car_bandpass_true_does_not_mutate_caller_data():
     """Regression: RawArray must not alias `data`'s buffer, since
-    set_eeg_reference mutates in place — a caller's ASR-cleaned chunk
+    set_eeg_reference/filter mutate in place — a caller's ASR-cleaned chunk
     (or anything aliasing it, e.g. EEGPipeline._last_asr) must survive
     classification unchanged."""
     clf = ICLabelClassifier(_make_info(), apply_car_bandpass=True)
@@ -350,35 +350,28 @@ def test_run_icalabel_slices_full_channel_unmixing_to_n_components():
     assert captured['unmixing_shape'] == (n_components, N_CH)
 
 
-# ── Cycle 10: CAR warning suppression is scoped to apply_car_bandpass=False;
-# the bandpass warning is always suppressed since the bandpass is never applied.
+# ── Cycle 10: CAR/bandpass warning suppression is scoped to apply_car_bandpass=False
 
-def _warn_then_label(message, n_components):
+def _warn_then_label(n_components):
     import warnings
 
     def _side_effect(raw, ica, method):
-        warnings.warn(message, RuntimeWarning)
+        warnings.warn(
+            'The provided Raw instance does not seem to be referenced to a '
+            'common average reference (CAR).',
+            RuntimeWarning,
+        )
         return _fake_label_components(n_components)
     return _side_effect
 
 
-_CAR_WARNING = (
-    'The provided Raw instance does not seem to be referenced to a '
-    'common average reference (CAR).'
-)
-_BANDPASS_WARNING = (
-    'The provided raw instance is not filtered between 1 and 100 Hz. '
-)
-
-
-def test_car_warning_suppressed_when_flag_false():
+def test_car_bandpass_warning_suppressed_when_flag_false():
     clf = ICLabelClassifier(_make_info(), apply_car_bandpass=False)
     data = _chunk()
     unmixing = np.eye(N_CH)
     mixing = np.eye(N_CH)
 
-    with patch('mne_icalabel.label_components',
-               side_effect=_warn_then_label(_CAR_WARNING, N_CH)):
+    with patch('mne_icalabel.label_components', side_effect=_warn_then_label(N_CH)):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             clf._run_icalabel(data, unmixing, mixing, SFREQ, N_CH)
@@ -386,37 +379,18 @@ def test_car_warning_suppressed_when_flag_false():
     assert not any('common average reference' in str(w.message) for w in caught)
 
 
-def test_car_warning_not_suppressed_when_flag_true():
+def test_car_bandpass_warning_not_suppressed_when_flag_true():
     clf = ICLabelClassifier(_make_info(), apply_car_bandpass=True)
     data = _chunk()
     unmixing = np.eye(N_CH)
     mixing = np.eye(N_CH)
 
-    with patch('mne_icalabel.label_components',
-               side_effect=_warn_then_label(_CAR_WARNING, N_CH)):
+    with patch('mne_icalabel.label_components', side_effect=_warn_then_label(N_CH)):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             clf._run_icalabel(data, unmixing, mixing, SFREQ, N_CH)
 
     assert any('common average reference' in str(w.message) for w in caught)
-
-
-@pytest.mark.parametrize('apply_car_bandpass', [True, False])
-def test_bandpass_warning_always_suppressed(apply_car_bandpass):
-    """The bandpass is never applied regardless of the flag, so its warning
-    is always expected noise and always suppressed."""
-    clf = ICLabelClassifier(_make_info(), apply_car_bandpass=apply_car_bandpass)
-    data = _chunk()
-    unmixing = np.eye(N_CH)
-    mixing = np.eye(N_CH)
-
-    with patch('mne_icalabel.label_components',
-               side_effect=_warn_then_label(_BANDPASS_WARNING, N_CH)):
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always')
-            clf._run_icalabel(data, unmixing, mixing, SFREQ, N_CH)
-
-    assert not any('filtered between 1 and 100 Hz' in str(w.message) for w in caught)
 
 
 # ── Cycle 11 (slow): integration with actual ICLabel network ───────────────

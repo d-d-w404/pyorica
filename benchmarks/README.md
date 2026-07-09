@@ -62,11 +62,11 @@ Key parameters in `reference.yaml`:
 | `orica_tau_const` | `3.0` | steady-state λ = 1 − exp(−1/(3 × sfreq)) |
 | `orica_block_size_white/ica` | `32` | samples per ORICA update block |
 | `icalabel_threshold` | `0.7` | artifact rejection probability |
-| `icalabel_apply_car_bandpass` | `false` | apply CAR before classifying, no bandpass (see below) |
+| `icalabel_apply_car_bandpass` | `false` | apply CAR + 1–100 Hz bandpass before classifying (see below) |
 | `classify_interval_s` | `0` | ICLabel every chunk |
 | `chunk_size` | `1000` | samples per simulated-real-time step |
 
-**`icalabel_apply_car_bandpass`:** ICLabel's neural network was trained on data referenced to a common average (CAR) and bandpass filtered between 1–100 Hz. The reference legacy ORICA pipeline classifies directly on ASR-cleaned, IIR-filtered data without adding this preprocessing — `false` (the default) matches that behavior. Set to `true` to apply CAR before classification instead, matching ICLabel's documented training assumption for referencing. The 1–100 Hz bandpass is deliberately **not** applied even when this is `true`: benchmarking showed CAR alone improves ICLabel accuracy while the extra bandpass step (redundant with the upstream IIR filter) made no difference.
+**`icalabel_apply_car_bandpass`:** ICLabel's neural network was trained on data referenced to a common average (CAR) and bandpass filtered between 1–100 Hz. The reference legacy ORICA pipeline classifies directly on ASR-cleaned, IIR-filtered data without adding this preprocessing — `false` (the default) matches that behavior. Set to `true` to apply CAR + 1–100 Hz filtering before classification instead, matching ICLabel's documented training assumptions.
 
 ICs get zeroed once above `icalabel_threshold` if their label is in the artifact set (`muscle`, `eye`, `heart`, `line_noise`, `channel_noise`); `brain`/`other` (or any unrecognized label) are never rejected.
 
