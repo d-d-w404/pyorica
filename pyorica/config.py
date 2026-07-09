@@ -23,7 +23,7 @@ class PipelineConfig:
     orica_lambda_0: float = 0.995
     orica_gamma: float = 0.6
     orica_num_subgaussian: int = 0
-    orica_tau_const: float = float("inf")
+    orica_tau_const: float = 3.0
     # ICLabel
     icalabel_threshold: float = 0.7
     # Apply CAR + 1-100 Hz bandpass to the classification input (matches

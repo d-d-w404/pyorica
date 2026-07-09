@@ -101,6 +101,52 @@ def test_update_processes_all_samples_when_chunk_not_multiple_of_block():
     assert orica._counter - counter_before == 70
 
 
+def test_update_processes_all_samples_with_unequal_block_sizes():
+    """block_size_white and block_size_ica are independent stationarity knobs;
+    the ICA pass must cover every sample even when they differ."""
+    orica = ORICAFilter(N_CH, SFREQ, block_size_white=25, block_size_ica=8)
+    counter_before = orica._counter
+    orica.update(RNG.standard_normal((N_CH, 100)))
+    assert orica._counter - counter_before == 100
+
+
+# ── Cycle 6: force_constant_lambda overrides ff_profile ──────────────────
+
+def test_force_constant_lambda_makes_ff_profile_irrelevant():
+    """With force_constant_lambda=True (default), cooling and adaptive profiles
+    must evolve identically — the profile choice becomes dead configuration."""
+    chunks = [RNG.standard_normal((N_CH, CHUNK)) for _ in range(8)]
+
+    cooling = ORICAFilter(N_CH, SFREQ, ff_profile="cooling")
+    adaptive = ORICAFilter(N_CH, SFREQ, ff_profile="adaptive")
+    for chunk in chunks:
+        cooling.update(chunk.copy())
+        adaptive.update(chunk.copy())
+
+    np.testing.assert_allclose(cooling.weights_, adaptive.weights_)
+    np.testing.assert_allclose(cooling.sphere_, adaptive.sphere_)
+
+
+def test_force_constant_lambda_false_restores_adaptive_profile():
+    """With force_constant_lambda=False, ff_profile="adaptive" must diverge
+    from the constant-lambda path instead of silently falling back to it."""
+    chunks = [RNG.standard_normal((N_CH, CHUNK)) for _ in range(8)]
+
+    constant = ORICAFilter(
+        N_CH, SFREQ, ff_profile="constant", force_constant_lambda=False
+    )
+    adaptive = ORICAFilter(
+        N_CH, SFREQ, ff_profile="adaptive", force_constant_lambda=False
+    )
+    for chunk in chunks:
+        constant.update(chunk.copy())
+        adaptive.update(chunk.copy())
+
+    assert not np.allclose(constant.weights_, adaptive.weights_), \
+        "adaptive ff_profile should diverge from constant-lambda when " \
+        "force_constant_lambda=False"
+
+
 # ── Cycle 6: wrong channel count raises ───────────────────────────────────
 
 def test_update_wrong_channels_raises():
@@ -157,7 +203,10 @@ def test_cross_talk_error_on_sim_stat():
     data, A_true, sfreq = _load_sim_dataset()
     n_ch = data.shape[0]
 
-    # params matching testScript.m: online whitening, block=8, cooling, localstat=Inf
+    # params matching testScript.m: online whitening, block=8, cooling, localstat=Inf.
+    # force_constant_lambda=False: this test validates the cooling profile
+    # itself (stationary-data assumption) against the MATLAB reference, not
+    # the force-constant real-time default.
     orica = ORICAFilter(
         n_components=n_ch,
         sfreq=sfreq,
@@ -167,6 +216,7 @@ def test_cross_talk_error_on_sim_stat():
         tau_const=np.inf,
         gamma=0.6,
         lambda_0=0.995,
+        force_constant_lambda=False,
     )
 
     chunk_size = 8
