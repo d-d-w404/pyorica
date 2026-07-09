@@ -345,6 +345,24 @@ def test_apply_car_bandpass_false_skips_car_and_filter():
     assert captured['highpass'] == 0.0
 
 
+def test_apply_car_bandpass_true_does_not_mutate_caller_data():
+    """Regression: RawArray must not alias `data`'s buffer, since
+    set_eeg_reference/filter mutate in place — a caller's ASR-cleaned chunk
+    (or anything aliasing it, e.g. EEGPipeline._last_asr) must survive
+    classification unchanged."""
+    clf = ICLabelClassifier(_make_info(), apply_car_bandpass=True)
+    data = _chunk()
+    original = data.copy()
+    unmixing = np.eye(N_CH)
+    mixing = np.eye(N_CH)
+
+    with patch('mne_icalabel.label_components',
+               side_effect=lambda raw, ica, method: _fake_label_components(N_CH)):
+        clf._run_icalabel(data, unmixing, mixing, SFREQ, N_CH)
+
+    np.testing.assert_array_equal(data, original)
+
+
 # ── Cycle 9: ICA container receives the injected matrices, sliced if needed ─
 
 def test_run_icalabel_injects_unmixing_and_mixing_into_ica_container():

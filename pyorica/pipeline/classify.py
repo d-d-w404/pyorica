@@ -161,7 +161,12 @@ class ICLabelClassifier:
         info = mne.create_info(
             ch_names=ch_names_mne, sfreq=float(sfreq), ch_types='eeg', verbose=False
         )
-        raw = mne.io.RawArray(np.asarray(data, dtype=np.float64), info, verbose=False)
+        # copy=True: RawArray otherwise reuses `data`'s buffer when it's already
+        # float64, and set_eeg_reference/filter below mutate in place — without
+        # this copy, apply_car_bandpass=True silently rewrites the caller's
+        # ASR-cleaned chunk (and anything aliasing it, e.g. verbose _last_asr).
+        raw = mne.io.RawArray(np.array(data, dtype=np.float64, copy=True), info,
+                               verbose=False)
         raw.set_montage(montage_obj, on_missing='ignore', verbose=False)
 
         if self._apply_car_bandpass:
