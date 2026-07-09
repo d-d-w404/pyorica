@@ -28,7 +28,9 @@ class PipelineConfig:
     icalabel_threshold: float = 0.7
     # Apply CAR + 1-100 Hz bandpass to the classification input (matches
     # ICLabel's documented training assumptions; off by default to match the
-    # legacy ORICA reference).
+    # legacy ORICA reference). True slightly improves classification accuracy
+    # (fewer brain ICs reduced as artifacts) at the cost of extra per-chunk
+    # bandpass-filter compute.
     icalabel_apply_car_bandpass: bool = False
     # Seconds between ICLabel runs in the online pipeline (0 = every chunk)
     classify_interval_s: float = 0.0

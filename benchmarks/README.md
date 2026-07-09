@@ -66,7 +66,7 @@ Key parameters in `reference.yaml`:
 | `classify_interval_s` | `0` | ICLabel every chunk |
 | `chunk_size` | `1000` | samples per simulated-real-time step |
 
-**`icalabel_apply_car_bandpass`:** ICLabel's neural network was trained on data referenced to a common average (CAR) and bandpass filtered between 1–100 Hz. The reference legacy ORICA pipeline classifies directly on ASR-cleaned, IIR-filtered data without adding this preprocessing — `false` (the default) matches that behavior. Set to `true` to apply CAR + 1–100 Hz filtering before classification instead, matching ICLabel's documented training assumptions.
+**`icalabel_apply_car_bandpass`:** ICLabel's neural network was trained on data referenced to a common average (CAR) and bandpass filtered between 1–100 Hz. The reference legacy ORICA pipeline classifies directly on ASR-cleaned, IIR-filtered data without adding this preprocessing — `false` (the default) matches that behavior. Set to `true` to apply CAR + 1–100 Hz filtering before classification instead, matching ICLabel's documented training assumptions. Benchmarking confirmed `true` slightly improves classification accuracy (fewer brain ICs reduced as artifacts), at the cost of the extra per-chunk bandpass-filter compute — CAR alone (without the bandpass) was tested and found worse than the combination.
 
 ICs get zeroed once above `icalabel_threshold` if their label is in the artifact set (`muscle`, `eye`, `heart`, `line_noise`, `channel_noise`); `brain`/`other` (or any unrecognized label) are never rejected.
 

@@ -53,7 +53,10 @@ class ICLabelClassifier:
     * ``apply_car_bandpass`` controls whether common-average-reference and a
       1-100 Hz bandpass are applied before classification, matching ICLabel's
       documented training assumptions — off by default to match the legacy
-      reference, but exposed so both settings can be benchmarked.
+      reference, but exposed so both settings can be benchmarked. Benchmarking
+      confirmed applying both (not CAR alone) slightly improves ICLabel
+      accuracy (fewer brain ICs misclassified/reduced as artifacts), at the
+      cost of extra per-chunk compute for the bandpass filter.
 
     Parameters
     ----------
@@ -66,7 +69,9 @@ class ICLabelClassifier:
         ``{'muscle', 'eye', 'heart', 'line_noise', 'channel_noise'}``. Accepts
         legacy spellings (``'eog'``, ``'ecg'``, ``'ch_noise'``).
     apply_car_bandpass : bool
-        See above (default False).
+        See above (default False). ``True`` slightly improves classification
+        accuracy (retains more brain-labeled ICs) but adds the runtime cost
+        of an extra bandpass filter on every classified chunk.
     montage : str
         MNE montage name for electrode positions (default ``standard_1020``).
     record_snapshots : bool
