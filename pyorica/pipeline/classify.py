@@ -7,17 +7,32 @@ import warnings
 
 import numpy as np
 
+LABEL_NAMES = [
+    'brain', 'muscle artifact', 'eye blink', 'heart beat', 'line noise',
+    'channel noise', 'other',
+]
+
 _DEFAULT_ARTIFACT_LABELS = frozenset(
     ['muscle', 'eye', 'heart', 'line_noise', 'channel_noise']
 )
 
+# Aliases map every spelling ICLabelClassifier may see to the internal
+# canonical short names used by _DEFAULT_ARTIFACT_LABELS / artifact_labels /
+# protect_labels. This includes mne_icalabel's own multi-word label strings
+# (e.g. 'muscle artifact', as returned by label_components()) alongside
+# legacy/alternate spellings ('eog', 'ch_noise', 'muscle_artifact', ...).
 _LABEL_ALIASES = {
-    'eog': 'eye',
-    'eye_blink': 'eye',
-    'ecg': 'heart',
-    'heart_beat': 'heart',
-    'ch_noise': 'channel_noise',
+    'muscle artifact': 'muscle',
     'muscle_artifact': 'muscle',
+    'eye blink': 'eye',
+    'eye_blink': 'eye',
+    'eog': 'eye',
+    'heart beat': 'heart',
+    'heart_beat': 'heart',
+    'ecg': 'heart',
+    'line noise': 'line_noise',
+    'channel noise': 'channel_noise',
+    'ch_noise': 'channel_noise',
 }
 
 

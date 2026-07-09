@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 mne = pytest.importorskip("mne")
 
-from pyorica.pipeline.classify import ICLabelClassifier
+from pyorica.pipeline.classify import LABEL_NAMES, ICLabelClassifier
 
 RNG = np.random.default_rng(5)
 N_CH = 8
@@ -200,6 +200,37 @@ def test_predicted_label_alias_from_run_icalabel_is_canonicalized():
     with patch.object(clf, '_run_icalabel', return_value=labels_probs):
         mask = clf(data, sources, unmixing, mixing, SFREQ)
     assert mask[6]
+
+
+# ── Cycle 5b: LABEL_NAMES and real mne_icalabel label strings ───────────────
+
+def test_label_names_matches_mne_icalabel_output_order():
+    """LABEL_NAMES must match the raw strings mne_icalabel.label_components()
+    returns (see ICLABEL_NUMERICAL_TO_STRING) — visualize.py indexes colors
+    and ordering by these exact strings, unmodified, from clf.snapshots."""
+    assert LABEL_NAMES == [
+        'brain', 'muscle artifact', 'eye blink', 'heart beat', 'line noise',
+        'channel noise', 'other',
+    ]
+
+
+@pytest.mark.parametrize('raw_label', [
+    'muscle artifact', 'eye blink', 'heart beat', 'line noise', 'channel noise',
+])
+def test_default_mode_marks_real_mne_icalabel_label_strings(raw_label):
+    """label_components() returns multi-word strings like 'muscle artifact',
+    not the short internal names ('muscle'). Regression for a bug where the
+    alias table only matched underscore-joined spellings, so no IC was ever
+    rejected as an artifact in the default (fail-open) mode."""
+    clf = ICLabelClassifier(_make_info())
+    data = _chunk()
+    sources = _chunk()
+    unmixing = np.eye(N_CH)
+    mixing = np.eye(N_CH)
+    labels_probs = _labels_probs(N_CH, {0: (raw_label, 0.9)})
+    with patch.object(clf, '_run_icalabel', return_value=labels_probs):
+        mask = clf(data, sources, unmixing, mixing, SFREQ)
+    assert mask[0]
 
 
 # ── Cycle 6: record_snapshots ──────────────────────────────────────────────
