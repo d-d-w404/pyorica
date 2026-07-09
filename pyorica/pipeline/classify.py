@@ -50,10 +50,12 @@ class ICLabelClassifier:
       reconstructed/scaled copy from sources.
     * Inject ORICA **unmixing (W)** and **mixing (A)** matrices separately into an
       MNE ICA container (Picard extended).
-    * ``apply_car_bandpass`` controls whether common-average-reference and a
-      1-100 Hz bandpass are applied before classification, matching ICLabel's
-      documented training assumptions — off by default to match the legacy
-      reference, but exposed so both settings can be benchmarked.
+    * ``apply_car_bandpass`` controls whether a common-average-reference is
+      applied before classification (benchmarking showed this improves
+      ICLabel accuracy) — off by default to match the legacy reference. The
+      1-100 Hz bandpass ICLabel's training assumes is deliberately NOT
+      applied even when this is on: data is already IIR-filtered upstream,
+      and benchmarking showed the extra bandpass step was redundant.
 
     Parameters
     ----------
@@ -143,8 +145,8 @@ class ICLabelClassifier:
             ch_names=ch_names_mne, sfreq=float(sfreq), ch_types='eeg', verbose=False
         )
         # copy=True: RawArray otherwise reuses `data`'s buffer when it's already
-        # float64, and set_eeg_reference/filter below mutate in place — without
-        # this copy, apply_car_bandpass=True silently rewrites the caller's
+        # float64, and set_eeg_reference below mutates in place — without this
+        # copy, apply_car_bandpass=True silently rewrites the caller's
         # ASR-cleaned chunk (and anything aliasing it, e.g. verbose _last_asr).
         raw = mne.io.RawArray(np.array(data, dtype=np.float64, copy=True), info,
                                verbose=False)
@@ -152,7 +154,6 @@ class ICLabelClassifier:
 
         if self._apply_car_bandpass:
             raw.set_eeg_reference('average', projection=False, verbose=False)
-            raw.filter(1.0, 100.0, verbose=False)
 
         unmixing = np.asarray(unmixing, dtype=float)
         if unmixing.shape == (n_channels, n_channels):
@@ -185,20 +186,22 @@ class ICLabelClassifier:
         return ic_labels, ic_probs
 
     def _label_components(self, label_components, raw, ica):
-        if self._apply_car_bandpass:
-            return label_components(raw, ica, method='iclabel')
-        # Data is already IIR-filtered upstream; ORICA matrices match that
-        # reference. mne-icalabel only warns about Raw.info metadata (CAR,
-        # 1-100 Hz) here — suppress that noise since it's expected.
+        # The 1-100 Hz bandpass is never applied (data is already IIR-filtered
+        # upstream; ORICA matrices match that reference), so mne-icalabel's
+        # bandpass-metadata warning is always expected noise here — suppress
+        # it unconditionally. Only suppress the CAR warning when CAR was
+        # skipped (apply_car_bandpass=False); when CAR is applied, any other
+        # warning should still surface normally.
         with warnings.catch_warnings():
-            warnings.filterwarnings(
-                'ignore', message='.*common average reference.*',
-                category=RuntimeWarning,
-            )
             warnings.filterwarnings(
                 'ignore', message='.*not filtered between 1 and 100 Hz.*',
                 category=RuntimeWarning,
             )
+            if not self._apply_car_bandpass:
+                warnings.filterwarnings(
+                    'ignore', message='.*common average reference.*',
+                    category=RuntimeWarning,
+                )
             return label_components(raw, ica, method='iclabel')
 
     def _canonical_names_for_montage(self):

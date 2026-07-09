@@ -26,9 +26,11 @@ class PipelineConfig:
     orica_tau_const: float = float("inf")
     # ICLabel
     icalabel_threshold: float = 0.7
-    # Apply CAR + 1-100 Hz bandpass to the classification input (matches
-    # ICLabel's documented training assumptions; off by default to match the
-    # legacy ORICA reference).
+    # Apply a common-average-reference to the classification input (improves
+    # ICLabel accuracy per benchmarking; off by default to match the legacy
+    # ORICA reference). Does NOT apply ICLabel's 1-100 Hz training bandpass —
+    # data is already IIR-filtered upstream, and that extra step was
+    # benchmarked as redundant.
     icalabel_apply_car_bandpass: bool = False
     # Seconds between ICLabel runs in the online pipeline (0 = every chunk)
     classify_interval_s: float = 0.0
@@ -78,7 +80,7 @@ class PipelineConfig:
             "# Artifact classes: muscle, eye, heart, line noise, channel noise.",
             f"icalabel_threshold: {self.icalabel_threshold}      # probability threshold ∈ [0, 1]",
             f"icalabel_apply_car_bandpass: {str(self.icalabel_apply_car_bandpass).lower()}"
-            "  # apply CAR + bandpass before classifying (default: false)",
+            "  # apply CAR before classifying, no bandpass (default: false)",
             f"classify_interval_s: {self.classify_interval_s}     # seconds between ICLabel runs (0 = every chunk)",
             "",
             "# ── Benchmark simulation ─────────────────────────────────────────────",
