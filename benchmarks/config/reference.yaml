@@ -34,6 +34,8 @@ orica_tau_const: 3.0            # local stationarity window (seconds); steady-st
 
 # ── ICLabel artifact classifier ───────────────────────────────────────────────
 icalabel_threshold: 0.7         # probability threshold ∈ [0, 1]
+icalabel_apply_car_bandpass: false  # apply CAR + 1-100 Hz bandpass before classifying
+icalabel_use_protect_list: false    # false = fail-open allow-list, true = fail-closed protect-list
 classify_interval_s: 0          # seconds between ICLabel runs (0 = every chunk)
 
 # ── Benchmark simulation ──────────────────────────────────────────────────────

@@ -77,7 +77,7 @@ _Avoid_: bulk runner, dataset runner
 _Avoid_: cross-subject aggregation, multi-subject analysis
 
 **Classifier**:
-Any callable `(sources, mixing_matrix, sfreq) → artifact_mask` that identifies artifact ICs. `mixing_matrix` is `A = pinv(W × sphere)` — the mixing matrix mapping source space back to channel space. The default implementation (`ICLabelClassifier`) uses ICLabel; any callable with this signature is valid. `ICLabelClassifier` accepts both legacy label spellings (`'eog'`, `'ecg'`, `'ch_noise'`) and newer mne-icalabel aliases (`'eye'`, `'heart'`, `'channel_noise'`), and normalises EEGLAB-style uppercase channel names automatically.
+Any callable `(data, sources, unmixing, mixing, sfreq) → artifact_mask` that identifies artifact ICs. `data` is the ASR-cleaned EEG chunk; `unmixing` is `W × sphere`; `mixing` is `pinv(unmixing)` — the mixing matrix mapping source space back to channel space. The default implementation (`ICLabelClassifier`) uses ICLabel; any callable with this signature is valid. `ICLabelClassifier` accepts both legacy label spellings (`'eog'`, `'ecg'`, `'ch_noise'`) and newer mne-icalabel aliases (`'eye'`, `'heart'`, `'channel_noise'`), and normalises EEGLAB-style uppercase channel names automatically. Two independent flags control classification policy: `apply_car_bandpass` (whether common-average-reference and a 1–100 Hz bandpass are applied to `data` before running ICLabel, matching its documented training assumptions — default `False`) and `use_protect_list` (whether label selection is fail-open, rejecting only `artifact_labels`, or fail-closed, rejecting everything except `protect_labels` — default `False`, fail-open).
 _Avoid_: IC labeler, artifact detector
 
 ### Streaming and evaluation
@@ -127,7 +127,7 @@ _Avoid_: IC timeline plot, IC label plot, class history
 - A **Stream** yields one **Chunk** at a time to the **Pipeline**
 - The **Pipeline** passes each **Chunk** through IIR → ASR → **ORICA** → **Classifier** → **Reconstruction**
 - **ORICA** maintains `W` and `sphere` across chunks; both are updated by `update()` and used by `transform()` / `inverse_transform()`
-- The **Classifier** receives ORICA's sources and returns an artifact mask; it does not modify **ORICA** state
+- The **Classifier** receives the ASR-cleaned chunk, ORICA's sources, and the unmixing/mixing matrices, and returns an artifact mask; it does not modify **ORICA** state
 - The eval `runner` wraps an `ArrayStream` + **Pipeline** to process a **Session** in **Simulated real-time**
 - **Calibration data** is passed to `fit()` on both ASR and ORICA before streaming begins; it is not a **Session**
 - In **verbose mode**, the runner accumulates **stage arrays** (`raw`, `iir`, `asr`, `orica`) alongside the normal `RunResult`

@@ -100,7 +100,7 @@ def test_verbose_stage_dtypes_are_float64():
 # ── Cycle 6: pass-all classifier → rms_in ≈ rms_out (no zeroing) ─────────
 
 def test_pass_all_rms_ratio_near_one():
-    pass_all = lambda sources, A, sfreq: np.zeros(sources.shape[0], dtype=bool)
+    pass_all = lambda data, sources, W, A, sfreq: np.zeros(sources.shape[0], dtype=bool)
     p = _make_pipeline(classifier=pass_all)
     p.fit(RNG.standard_normal((N_CH, int(SFREQ * 5))))
 

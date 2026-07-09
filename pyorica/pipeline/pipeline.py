@@ -10,7 +10,7 @@ from pyorica.orica.core import ORICAFilter
 from pyorica.pipeline.asr import ASRAdapter
 
 
-def _no_artifacts(sources, weights, sfreq):
+def _no_artifacts(data, sources, unmixing, mixing, sfreq):
     return np.zeros(sources.shape[0], dtype=bool)
 
 
@@ -122,8 +122,9 @@ class EEGPipeline:
 
         if self._classify_interval_samples == 0:
             # Legacy per-chunk mode: compute mask and apply immediately (original behaviour)
-            mixing_matrix = np.linalg.pinv(self.orica.weights_ @ self.orica.sphere_)
-            mask = self._classifier(sources, mixing_matrix, self._sfreq)
+            unmixing = self.orica.weights_ @ self.orica.sphere_
+            mixing = np.linalg.pinv(unmixing)
+            mask = self._classifier(out, sources, unmixing, mixing, self._sfreq)
             sources[mask] = 0.0
         else:
             # Interval mode — causal: apply cached mask from the PREVIOUS interval first,
@@ -133,8 +134,11 @@ class EEGPipeline:
 
             self._samples_since_classify += out.shape[1]
             if self._samples_since_classify >= self._classify_interval_samples:
-                mixing_matrix = np.linalg.pinv(self.orica.weights_ @ self.orica.sphere_)
-                self._cached_mask = self._classifier(sources, mixing_matrix, self._sfreq)
+                unmixing = self.orica.weights_ @ self.orica.sphere_
+                mixing = np.linalg.pinv(unmixing)
+                self._cached_mask = self._classifier(
+                    out, sources, unmixing, mixing, self._sfreq
+                )
                 # Carry over the overage so long sessions stay phase-locked to the interval
                 self._samples_since_classify %= self._classify_interval_samples
 

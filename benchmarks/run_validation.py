@@ -164,14 +164,20 @@ def run_subject(set_path: Path, config, out_dir: Path,
           f"({n_samples/sfreq:.0f} s) — calib {config.asr_calibration_seconds:.0f} s")
 
     info = _make_mne_info(ch_names, sfreq)
-    classifier = ICLabelClassifier(info, threshold=config.icalabel_threshold,
-                                   record_snapshots=True)
+    classifier = ICLabelClassifier(
+        info, threshold=config.icalabel_threshold,
+        apply_car_bandpass=config.icalabel_apply_car_bandpass,
+        use_protect_list=config.icalabel_use_protect_list,
+        record_snapshots=True,
+    )
     pipeline = EEGPipeline(n_channels=n_ch, sfreq=sfreq,
                            classifier=classifier, verbose=True, config=config)
 
     chunk_size = int(getattr(config, "chunk_size", CHUNK_SIZE) or CHUNK_SIZE)
     print(f"[{subject}] running pipeline (ASR={config.asr_backend}, "
           f"cutoff={config.asr_cutoff}, ICLabel threshold={config.icalabel_threshold}, "
+          f"car_bandpass={config.icalabel_apply_car_bandpass}, "
+          f"protect_list={config.icalabel_use_protect_list}, "
           f"chunk={chunk_size} samples)...")
     t0 = time.monotonic()
     result = run(pipeline, data, chunk_size=chunk_size,
