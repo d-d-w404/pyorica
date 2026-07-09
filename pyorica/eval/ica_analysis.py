@@ -33,11 +33,18 @@ def _label_ica(raw, ica) -> List[str]:
     return list(labels_out["labels"])
 
 
-def _make_raw(data: np.ndarray, ch_names: Sequence[str], sfreq: float):
+def _make_raw(data: np.ndarray, ch_names: Sequence[str], sfreq: float,
+              l_freq: Optional[float] = None, h_freq: Optional[float] = None):
     """Wrap a (channels × samples) array in an MNE Raw object with standard_1020 montage.
 
     Channel names are matched case-insensitively to the montage so that datasets
     using all-caps conventions (e.g. FP1, CZ, OZ) are handled correctly.
+
+    ``l_freq``/``h_freq`` record the bandpass already applied to ``data``
+    upstream (by pyorica's IIRFilter) in the Raw's filter metadata.
+    ``mne.create_info`` otherwise defaults ``info['highpass']`` to 0.0, which
+    makes ``ICA.fit`` warn about missing high-pass filtering even when the
+    data was already filtered before reaching this function.
     """
     import mne
 
@@ -48,6 +55,12 @@ def _make_raw(data: np.ndarray, ch_names: Sequence[str], sfreq: float):
     info = mne.create_info(normalized, sfreq, ch_types="eeg", verbose=False)
     raw = mne.io.RawArray(data, info, verbose=False)
     raw.set_montage(montage, on_missing="ignore", verbose=False)
+    if l_freq is not None or h_freq is not None:
+        with raw.info._unlock():
+            if l_freq is not None:
+                raw.info["highpass"] = float(l_freq)
+            if h_freq is not None:
+                raw.info["lowpass"] = float(h_freq)
     return raw
 
 
@@ -131,6 +144,8 @@ def ic_source_energy(
     cache_dir: Optional[Path] = None,
     subject: Optional[str] = None,
     exclude_lead_seconds: float = 0.0,
+    l_freq: Optional[float] = 1.0,
+    h_freq: Optional[float] = 50.0,
 ) -> List[dict]:
     """Compute per-IC source mean-square energy across pipeline stages.
 
@@ -161,6 +176,12 @@ def ic_source_energy(
     exclude_lead_seconds : float
         If > 0, MS / pct stats ignore the first this many seconds of data.
         ICA fitting still uses the full IIR array. Default 0 (use all samples).
+    l_freq, h_freq : float, optional
+        Bandpass cutoffs already applied to ``iir`` upstream (matches
+        ``PipelineConfig.iir_l_freq``/``iir_h_freq``). Recorded in the Raw's
+        filter metadata so ``ICA.fit`` doesn't warn about missing high-pass
+        filtering that was, in fact, already applied. Pass ``None`` to leave
+        the metadata unset (and let MNE warn if appropriate).
 
     Returns
     -------
@@ -168,7 +189,7 @@ def ic_source_energy(
         ``ic``, ``label``, ``ms_iir``, ``ms_asr``, ``ms_orica``,
         ``pct_asr``, ``pct_orica``
     """
-    raw_iir = _make_raw(iir, ch_names, sfreq)
+    raw_iir = _make_raw(iir, ch_names, sfreq, l_freq=l_freq, h_freq=h_freq)
 
     use_cache = cache_dir is not None and subject is not None
     if use_cache:

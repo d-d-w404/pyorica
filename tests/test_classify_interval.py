@@ -16,7 +16,9 @@ CHUNK_SIZE = 1000  # samples per chunk (4 s at 250 Hz)
 
 def _make_counting_classifier():
     """Return a mock classifier that records every call and returns all-False."""
-    clf = MagicMock(side_effect=lambda sources, A, sfreq: np.zeros(sources.shape[0], dtype=bool))
+    clf = MagicMock(
+        side_effect=lambda data, sources, W, A, sfreq: np.zeros(sources.shape[0], dtype=bool)
+    )
     return clf
 
 
@@ -65,7 +67,9 @@ def test_classify_interval_zero_calls_every_chunk():
 
 def test_first_chunk_uses_no_artifact_mask():
     """Before 30 s of data have accumulated, no ICs should be zeroed (empty mask)."""
-    all_zero = MagicMock(side_effect=lambda sources, A, sfreq: np.ones(sources.shape[0], dtype=bool))
+    all_zero = MagicMock(
+        side_effect=lambda data, sources, W, A, sfreq: np.ones(sources.shape[0], dtype=bool)
+    )
 
     pipeline = EEGPipeline(
         n_channels=N_CH, sfreq=SFREQ,
@@ -93,7 +97,9 @@ def test_mask_from_interval_applied_to_subsequent_chunks():
     during the 8th chunk (cumulative: 8000 ≥ 7500). The cached mask is applied to
     the 9th chunk and later — never to data used to compute it.
     """
-    zero_all = MagicMock(side_effect=lambda sources, A, sfreq: np.ones(sources.shape[0], dtype=bool))
+    zero_all = MagicMock(
+        side_effect=lambda data, sources, W, A, sfreq: np.ones(sources.shape[0], dtype=bool)
+    )
 
     pipeline = EEGPipeline(
         n_channels=N_CH, sfreq=SFREQ,

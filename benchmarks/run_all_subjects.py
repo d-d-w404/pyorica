@@ -258,7 +258,8 @@ def main() -> None:
 
     print(f"\npyorica batch benchmark — {total} subject(s)")
     print(f"ASR backend : {config.asr_backend}  cutoff={config.asr_cutoff}")
-    print(f"ICLabel thr : {config.icalabel_threshold}")
+    print(f"ICLabel thr : {config.icalabel_threshold}  "
+          f"car_bandpass={config.icalabel_apply_car_bandpass}")
     print(f"Output dir  : {run_dir.resolve()}\n")
 
     # Separate already-complete subjects before touching the pool

@@ -62,8 +62,22 @@ Key parameters in `reference.yaml`:
 | `orica_tau_const` | `3.0` | steady-state λ = 1 − exp(−1/(3 × sfreq)) |
 | `orica_block_size_white/ica` | `32` | samples per ORICA update block |
 | `icalabel_threshold` | `0.7` | artifact rejection probability |
+| `icalabel_apply_car_bandpass` | `false` | apply CAR + 1–100 Hz bandpass before classifying (see below) |
 | `classify_interval_s` | `0` | ICLabel every chunk |
 | `chunk_size` | `1000` | samples per simulated-real-time step |
+
+**`icalabel_apply_car_bandpass`:** ICLabel's neural network was trained on data referenced to a common average (CAR) and bandpass filtered between 1–100 Hz. The reference legacy ORICA pipeline classifies directly on ASR-cleaned, IIR-filtered data without adding this preprocessing — `false` (the default) matches that behavior. Set to `true` to apply CAR + 1–100 Hz filtering before classification instead, matching ICLabel's documented training assumptions. Benchmarking confirmed `true` slightly improves classification accuracy (fewer brain ICs reduced as artifacts), at the cost of the extra per-chunk bandpass-filter compute — CAR alone (without the bandpass) was tested and found worse than the combination.
+
+ICs get zeroed once above `icalabel_threshold` if their label is in the artifact set (`muscle`, `eye`, `heart`, `line_noise`, `channel_noise`); `brain`/`other` (or any unrecognized label) are never rejected.
+
+The flag defaults to the legacy-matching setting, so you can A/B a single run:
+
+```bash
+python benchmarks/run_all_subjects.py --config benchmarks/config/reference.yaml \
+    --ica-cache-dir benchmarks/ica_cache --output-dir benchmarks/results/car_bandpass_on
+```
+
+with a copy of `reference.yaml` that only flips `icalabel_apply_car_bandpass: true`, then compare `cross_session_summary.csv` between the two output directories via Step 3.
 
 To create a custom config based on current defaults:
 

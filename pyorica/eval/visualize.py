@@ -10,15 +10,16 @@ import numpy as np
 
 from pyorica.pipeline.classify import LABEL_NAMES
 
-# MNE-icalabel color convention (RGB, 0–1)
+# MNE-icalabel color convention (RGB, 0–1). Keys are the raw label strings
+# ICLabelClassifier stores in snapshots, i.e. LABEL_NAMES from classify.py.
 _LABEL_COLORS: dict[str, tuple[float, float, float]] = {
-    'brain':      (0.149, 0.588, 0.898),
-    'muscle':     (0.957, 0.263, 0.212),
-    'eog':        (0.298, 0.686, 0.314),
-    'ecg':        (0.914, 0.118, 0.388),
-    'line_noise': (1.000, 0.922, 0.231),
-    'ch_noise':   (1.000, 0.596, 0.000),
-    'other':      (0.620, 0.620, 0.620),
+    'brain':           (0.149, 0.588, 0.898),
+    'muscle artifact': (0.957, 0.263, 0.212),
+    'eye blink':       (0.298, 0.686, 0.314),
+    'heart beat':      (0.914, 0.118, 0.388),
+    'line noise':      (1.000, 0.922, 0.231),
+    'channel noise':   (1.000, 0.596, 0.000),
+    'other':           (0.620, 0.620, 0.620),
 }
 
 # Legend order used for IC sorting (brain leftmost, other rightmost)

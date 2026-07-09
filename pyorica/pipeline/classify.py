@@ -1,186 +1,226 @@
-"""IC artifact classifiers."""
+"""IC artifact classifiers — legacy ORICA-compatible ICLabel path.
+
+Requires ``pip install pyorica[pipeline]``.
+"""
+
+import warnings
 
 import numpy as np
 
-LABEL_NAMES = ['brain', 'muscle', 'eog', 'ecg', 'line_noise', 'ch_noise', 'other']
-_DEFAULT_ARTIFACT_LABELS = frozenset(['muscle', 'eog', 'ecg', 'line_noise', 'ch_noise'])
+LABEL_NAMES = [
+    'brain', 'muscle artifact', 'eye blink', 'heart beat', 'line noise',
+    'channel noise', 'other',
+]
 
-# Aliases for alternate spellings across mne-icalabel versions and user convention.
-# All map to the internal LABEL_NAMES entries used by run_iclabel column order.
+_DEFAULT_ARTIFACT_LABELS = frozenset(
+    ['muscle', 'eye', 'heart', 'line_noise', 'channel_noise']
+)
+
+# Aliases map every spelling ICLabelClassifier may see to the internal
+# canonical short names used by _DEFAULT_ARTIFACT_LABELS / artifact_labels.
+# This includes mne_icalabel's own multi-word label strings
+# (e.g. 'muscle artifact', as returned by label_components()) alongside
+# legacy/alternate spellings ('eog', 'ch_noise', 'muscle_artifact', ...).
 _LABEL_ALIASES = {
-    'eye': 'eog',
-    'eye_blink': 'eog',
-    'heart': 'ecg',
-    'heart_beat': 'ecg',
-    'channel_noise': 'ch_noise',
+    'muscle artifact': 'muscle',
     'muscle_artifact': 'muscle',
+    'eye blink': 'eye',
+    'eye_blink': 'eye',
+    'eog': 'eye',
+    'heart beat': 'heart',
+    'heart_beat': 'heart',
+    'ecg': 'heart',
+    'line noise': 'line_noise',
+    'channel noise': 'channel_noise',
+    'ch_noise': 'channel_noise',
 }
 
 
-def _normalise_label(label: str) -> str:
-    lbl = label.strip().lower()
+def _canonical_icalabel_label(label):
+    lbl = str(label).strip().lower()
     return _LABEL_ALIASES.get(lbl, lbl)
 
 
-def _normalise_channel_names(info):
-    """Return a copy of info with channel names remapped to MNE standard_1020 spelling.
-
-    Handles EEGLAB-style all-caps names (FP1, FZ, CZ) that mne-icalabel's montage
-    lookup requires in mixed-case form (Fp1, Fz, Cz). Channels not found in
-    standard_1020 are left unchanged.
-    """
-    import mne
-    montage = mne.channels.make_standard_montage('standard_1020')
-    lookup = {n.upper().replace(' ', ''): n for n in montage.ch_names}
-    rename = {
-        ch: lookup[ch.strip().upper().replace(' ', '')]
-        for ch in info['ch_names']
-        if ch.strip().upper().replace(' ', '') in lookup and
-           ch != lookup[ch.strip().upper().replace(' ', '')]
-    }
-    if not rename:
-        return info
-    info = info.copy()
-    info.rename_channels(rename)
-    return info
-
-
 class ICLabelClassifier:
-    """Artifact classifier using the ICLabel neural network.
+    """Artifact classifier using ICLabel, matching legacy ORICA ``use_icalabel_online``.
+
+    Differences from the previous pyorica implementation:
+
+    * Feed **ASR-cleaned EEG** (``data``) directly to ``label_components``, not a
+      reconstructed/scaled copy from sources.
+    * Inject ORICA **unmixing (W)** and **mixing (A)** matrices separately into an
+      MNE ICA container (Picard extended).
+    * ``apply_car_bandpass`` controls whether common-average-reference and a
+      1-100 Hz bandpass are applied before classification, matching ICLabel's
+      documented training assumptions — off by default to match the legacy
+      reference, but exposed so both settings can be benchmarked. Benchmarking
+      confirmed applying both (not CAR alone) slightly improves ICLabel
+      accuracy (fewer brain ICs misclassified/reduced as artifacts), at the
+      cost of extra per-chunk compute for the bandpass filter.
 
     Parameters
     ----------
     info : mne.Info
-        MNE channel info with electrode positions (required for topographic maps).
-        Channel names are automatically normalised to MNE standard_1020 spelling
-        (e.g. ``FP1`` → ``Fp1``) so EEGLAB-sourced infos work without manual
-        renaming.
-    artifact_labels : set of str, optional
-        IC labels treated as artifacts. Defaults to
-        ``{'muscle', 'eog', 'ecg', 'line_noise', 'ch_noise'}``.
-        Accepts both legacy spellings (``'eog'``, ``'ecg'``, ``'ch_noise'``) and
-        newer mne-icalabel aliases (``'eye'``, ``'heart'``, ``'channel_noise'``).
+        MNE channel info (names used for montage matching).
     threshold : float
-        Probability threshold for the top-predicted label to be accepted as an
-        artifact (default 0.5).
+        Minimum top-1 probability required to reject an IC (default 0.7).
+    artifact_labels : set of str, optional
+        Labels rejected once above ``threshold``. Defaults to
+        ``{'muscle', 'eye', 'heart', 'line_noise', 'channel_noise'}``. Accepts
+        legacy spellings (``'eog'``, ``'ecg'``, ``'ch_noise'``).
+    apply_car_bandpass : bool
+        See above (default False). ``True`` slightly improves classification
+        accuracy (retains more brain-labeled ICs) but adds the runtime cost
+        of an extra bandpass filter on every classified chunk.
+    montage : str
+        MNE montage name for electrode positions (default ``standard_1020``).
+    record_snapshots : bool
+        If True, append ``(seq, top1_labels, top1_probs, mask)`` to
+        ``self.snapshots`` on each classification call (for benchmark timeline
+        plots). Does not affect the returned artifact mask.
 
     Usage
     -----
     Pass as the ``classifier`` argument to ``EEGPipeline``::
 
-        clf = ICLabelClassifier(raw.info)
+        clf = ICLabelClassifier(raw.info, threshold=0.7)
         pipeline = EEGPipeline(n_channels=n_ch, sfreq=sfreq, classifier=clf)
-
-    Requires ``pip install pyorica[pipeline]``.
     """
 
-    def __init__(self, info, artifact_labels=None, threshold=0.5,
-                 record_snapshots=False):
-        self._info = _normalise_channel_names(info)
+    def __init__(self, info, threshold=0.7, artifact_labels=None,
+                 record_snapshots=False, apply_car_bandpass=False,
+                 montage='standard_1020'):
+        self._info = info
+        self._ch_names = list(info['ch_names'])
+        self._montage = montage
+        self._apply_car_bandpass = apply_car_bandpass
+        self._threshold = threshold
+        self._record_snapshots = record_snapshots
+        self.snapshots = []
         self._artifact_labels = frozenset(
-            _normalise_label(lbl)
+            _canonical_icalabel_label(lbl)
             for lbl in (artifact_labels if artifact_labels is not None
                         else _DEFAULT_ARTIFACT_LABELS)
         )
-        self._threshold = threshold
-        self._record_snapshots = record_snapshots
-        self.snapshots: list = []  # (seq_num, top1_labels, top1_probs) per call
 
-    def __call__(self, sources, mixing_matrix, sfreq):
-        """Classify ICs and return an artifact mask.
-
-        Parameters
-        ----------
-        sources : ndarray, shape (n_components, n_samples)
-            IC activation time series.
-        mixing_matrix : ndarray, shape (n_channels, n_components)
-            Mixing matrix A = pinv(W @ sphere).
-        sfreq : float
-            Sampling frequency in Hz.
-
-        Returns
-        -------
-        mask : ndarray of bool, shape (n_components,)
-            True where a component is classified as an artifact.
-        """
-        # ICLabel's FIR filter needs ~3.5 × sfreq samples (825 at 250 Hz, 845 at
+    def __call__(self, data, sources, unmixing, mixing, sfreq):
+        n_components = sources.shape[0]
+        # ICLabel's FIR filter needs ~3.5 x sfreq samples (825 at 250 Hz, 845 at
         # 256 Hz). Short final chunks cannot be classified — treat as artifact-free.
-        if sources.shape[1] < int(sfreq * 3.5):
-            return np.zeros(sources.shape[0], dtype=bool)
+        if data.shape[1] < int(sfreq * 3.5):
+            return np.zeros(n_components, dtype=bool)
 
-        proba = self._get_probabilities(sources, mixing_matrix, sfreq)
-        argmax_idx = np.argmax(proba, axis=1)
-        pred_labels = [LABEL_NAMES[i] for i in argmax_idx]
-        pred_proba = proba[np.arange(len(pred_labels)), argmax_idx]
-
-        mask = np.array(
-            [label in self._artifact_labels and prob >= self._threshold
-             for label, prob in zip(pred_labels, pred_proba)],
-            dtype=bool,
+        label_strings, prob_top1 = self._run_icalabel(
+            data, unmixing, mixing, sfreq, n_components
         )
+        mask = self._artifact_mask(label_strings, prob_top1)
 
         if self._record_snapshots:
             self.snapshots.append((
                 len(self.snapshots),
-                pred_labels,
-                pred_proba.copy(),
+                list(label_strings),
+                np.asarray(prob_top1, dtype=np.float64).copy(),
                 mask.copy(),
             ))
 
         return mask
 
-    def _get_probabilities(self, sources, mixing_matrix, sfreq):
-        """Return ICLabel probability matrix of shape (n_components, 7).
+    def _artifact_mask(self, label_strings, prob_top1):
+        mask = np.zeros(len(label_strings), dtype=bool)
+        for i, label in enumerate(label_strings):
+            prob = float(prob_top1[i]) if np.isfinite(prob_top1[i]) else None
+            if prob is None or prob < self._threshold:
+                continue
+            canonical = _canonical_icalabel_label(label)
+            mask[i] = canonical in self._artifact_labels
+        return mask
 
-        Columns: brain, muscle, eog, ecg, line_noise, ch_noise, other.
-        """
+    def _run_icalabel(self, data, unmixing, mixing, sfreq, n_components):
+        """Port of ORICA/code/orica_processor.py ``use_icalabel_online``."""
         import mne
-        from mne_icalabel.iclabel import get_iclabel_features, run_iclabel
+        from mne.preprocessing import ICA
+        from mne_icalabel import label_components
 
-        n_components, n_samples = sources.shape
-        n_channels = mixing_matrix.shape[0]
+        n_channels = len(self._ch_names)
+        ch_names_mne, montage_obj = self._canonical_names_for_montage()
 
-        # Reconstruct EEG in volts (scale to ~10 µV range for ICLabel)
-        eeg = (mixing_matrix @ sources) * 1e-5
+        info = mne.create_info(
+            ch_names=ch_names_mne, sfreq=float(sfreq), ch_types='eeg', verbose=False
+        )
+        # copy=True: RawArray otherwise reuses `data`'s buffer when it's already
+        # float64, and set_eeg_reference/filter below mutate in place — without
+        # this copy, apply_car_bandpass=True silently rewrites the caller's
+        # ASR-cleaned chunk (and anything aliasing it, e.g. verbose _last_asr).
+        raw = mne.io.RawArray(np.array(data, dtype=np.float64, copy=True), info,
+                               verbose=False)
+        raw.set_montage(montage_obj, on_missing='ignore', verbose=False)
 
-        raw = mne.io.RawArray(eeg, self._info, verbose=False)
-        raw.set_eeg_reference('average', projection=False, verbose=False)
-        raw.filter(1.0, 100.0, verbose=False)
+        if self._apply_car_bandpass:
+            raw.set_eeg_reference('average', projection=False, verbose=False)
+            raw.filter(1.0, 100.0, verbose=False)
 
-        ica = self._make_ica(mixing_matrix, n_components, n_channels, n_samples)
-        features = get_iclabel_features(raw, ica)
-        try:
-            return run_iclabel(*features, backend=None)
-        except TypeError:
-            # mne-icalabel < 0.6 has no backend= kwarg
-            return run_iclabel(*features)
+        unmixing = np.asarray(unmixing, dtype=float)
+        if unmixing.shape == (n_channels, n_channels):
+            unmixing = unmixing[:n_components, :]
+        mixing = np.asarray(mixing, dtype=float)
 
-    def _make_ica(self, mixing_matrix, n_components, n_channels, n_samples):
-        """Construct a fitted-looking MNE ICA from the ORICA mixing matrix."""
-        import mne
-
-        ica = mne.preprocessing.ICA(
+        ica = ICA(
             n_components=n_components,
-            method='infomax',
-            fit_params={'extended': True},
+            method='picard',
+            fit_params={'extended': True, 'ortho': False},
+            random_state=97,
             verbose=False,
         )
-        ica.current_fit = 'raw'
+        ica.unmixing_matrix_ = unmixing.copy()
+        ica.mixing_matrix_ = mixing.copy()
+        ica._unmixing = unmixing.copy()
+        ica._mixing = mixing.copy()
         ica.n_components_ = n_components
-        ica._max_pca_components = n_components
-        ica.n_pca_components = n_components
+        ica.ch_names = list(ch_names_mne)
+        ica._ica_names = [f'IC{k:03d}' for k in range(n_components)]
+        ica.current_fit = 'raw'
         ica.pca_mean_ = np.zeros(n_channels)
         ica.pca_components_ = np.eye(n_channels)
         ica.pca_explained_variance_ = np.ones(n_channels)
-        # unmixing = pinv(A); then get_components() = pinv(unmixing) = A
-        ica.unmixing_matrix_ = np.linalg.pinv(mixing_matrix)
-        ica.mixing_matrix_ = mixing_matrix
-        ica._ica_names = [f'ICA{i:03d}' for i in range(n_components)]
-        ica.n_samples_ = n_samples
-        ica.n_iter_ = 1
-        ica.reject_ = None
-        ica.pre_whitener_ = np.ones((n_channels, 1))
-        ica.ch_names = self._info['ch_names']
-        ica.exclude = []
-        ica.info = self._info.copy()
-        return ica
+
+        labels_out = self._label_components(label_components, raw, ica)
+
+        ic_labels = np.asarray(labels_out['labels'], dtype=object)
+        ic_probs = np.asarray(labels_out['y_pred_proba'], dtype=np.float64)
+        return ic_labels, ic_probs
+
+    def _label_components(self, label_components, raw, ica):
+        if self._apply_car_bandpass:
+            return label_components(raw, ica, method='iclabel')
+        # Data is already IIR-filtered upstream; ORICA matrices match that
+        # reference. mne-icalabel only warns about Raw.info metadata (CAR,
+        # 1-100 Hz) here — suppress that noise since it's expected.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                'ignore', message='.*common average reference.*',
+                category=RuntimeWarning,
+            )
+            warnings.filterwarnings(
+                'ignore', message='.*not filtered between 1 and 100 Hz.*',
+                category=RuntimeWarning,
+            )
+            return label_components(raw, ica, method='iclabel')
+
+    def _canonical_names_for_montage(self):
+        """Map FP1/FZ/CZ-style labels to MNE standard_1020 spellings (Fp1/Fz/Cz).
+
+        Assumes the caller's channel names already correspond to a standard
+        10-20 layout (true for the NCTU Quick-30 dataset this pipeline targets
+        today, see benchmarks/run_validation.py). Revisit if/when a genuinely
+        custom montage with real digitized positions needs to flow through
+        this classifier instead of being forced onto standard_1020.
+        """
+        import mne
+
+        montage_obj = mne.channels.make_standard_montage(self._montage)
+        lookup = {name.upper().replace(' ', ''): name for name in montage_obj.ch_names}
+        out = []
+        for ch in self._ch_names:
+            key = str(ch).strip().upper().replace(' ', '')
+            out.append(lookup.get(key, str(ch).strip()))
+        return out, montage_obj
