@@ -63,24 +63,21 @@ Key parameters in `reference.yaml`:
 | `orica_block_size_white/ica` | `32` | samples per ORICA update block |
 | `icalabel_threshold` | `0.7` | artifact rejection probability |
 | `icalabel_apply_car_bandpass` | `false` | apply CAR + 1–100 Hz bandpass before classifying (see below) |
-| `icalabel_use_protect_list` | `false` | label-selection policy: fail-open vs fail-closed (see below) |
 | `classify_interval_s` | `0` | ICLabel every chunk |
 | `chunk_size` | `1000` | samples per simulated-real-time step |
 
 **`icalabel_apply_car_bandpass`:** ICLabel's neural network was trained on data referenced to a common average (CAR) and bandpass filtered between 1–100 Hz. The reference legacy ORICA pipeline classifies directly on ASR-cleaned, IIR-filtered data without adding this preprocessing — `false` (the default) matches that behavior. Set to `true` to apply CAR + 1–100 Hz filtering before classification instead, matching ICLabel's documented training assumptions.
 
-**`icalabel_use_protect_list`:** controls which ICs get zeroed once above `icalabel_threshold`.
-- `false` (default, fail-open): only labels in the artifact set (`muscle`, `eye`, `heart`, `line_noise`, `channel_noise`) are rejected — an unrecognized label is never zeroed.
-- `true` (fail-closed, matches the legacy ORICA reference): every label except `brain`/`other` is rejected — an unrecognized label *is* zeroed.
+ICs get zeroed once above `icalabel_threshold` if their label is in the artifact set (`muscle`, `eye`, `heart`, `line_noise`, `channel_noise`); `brain`/`other` (or any unrecognized label) are never rejected.
 
-Both flags default to the safer/legacy-matching setting but are independent, so you can A/B a single run:
+The flag defaults to the legacy-matching setting, so you can A/B a single run:
 
 ```bash
 python benchmarks/run_all_subjects.py --config benchmarks/config/reference.yaml \
     --ica-cache-dir benchmarks/ica_cache --output-dir benchmarks/results/car_bandpass_on
 ```
 
-with a copy of `reference.yaml` that only flips `icalabel_apply_car_bandpass: true` (or `icalabel_use_protect_list: true`), then compare `cross_session_summary.csv` between the two output directories via Step 3.
+with a copy of `reference.yaml` that only flips `icalabel_apply_car_bandpass: true`, then compare `cross_session_summary.csv` between the two output directories via Step 3.
 
 To create a custom config based on current defaults:
 

@@ -14,19 +14,15 @@ def test_defaults_match_reference_experiment():
     assert cfg.icalabel_threshold == 0.7
     assert cfg.asr_calibration_seconds == 120.0
     assert cfg.icalabel_apply_car_bandpass is False
-    assert cfg.icalabel_use_protect_list is False
 
 
 def test_yaml_roundtrip_icalabel_flags(tmp_path):
     from pyorica.config import PipelineConfig
-    cfg = PipelineConfig(
-        icalabel_apply_car_bandpass=True, icalabel_use_protect_list=True
-    )
+    cfg = PipelineConfig(icalabel_apply_car_bandpass=True)
     path = tmp_path / "config.yaml"
     cfg.to_yaml(path)
     loaded = PipelineConfig.from_yaml(path)
     assert loaded.icalabel_apply_car_bandpass is True
-    assert loaded.icalabel_use_protect_list is True
 
 
 # ── Cycle 2: YAML round-trip preserves all values including inf ───────────

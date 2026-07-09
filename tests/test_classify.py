@@ -73,10 +73,10 @@ def test_short_chunk_returns_no_artifacts_without_error():
     assert not mask.any()
 
 
-# ── Cycle 3: default (fail-open) mode — known artifact label above threshold ─
+# ── Cycle 3: allow-list mode — known artifact label above threshold ─────────
 
 def test_default_mode_marks_known_artifact_label_above_threshold():
-    clf = ICLabelClassifier(_make_info())  # default threshold=0.7, fail-open
+    clf = ICLabelClassifier(_make_info())  # default threshold=0.7
     data = _chunk()
     sources = _chunk()
     unmixing = np.eye(N_CH)
@@ -100,50 +100,9 @@ def test_default_mode_does_not_mark_below_threshold():
     assert not mask[0]
 
 
-# ── Cycle 4: use_protect_list=True — fail-closed on unrecognized labels ─────
-
-def test_protect_list_mode_marks_recognized_non_protected_label():
-    clf = ICLabelClassifier(_make_info(), use_protect_list=True)
-    data = _chunk()
-    sources = _chunk()
-    unmixing = np.eye(N_CH)
-    mixing = np.eye(N_CH)
-    labels_probs = _labels_probs(N_CH, {3: ('muscle', 0.9)})
-    with patch.object(clf, '_run_icalabel', return_value=labels_probs):
-        mask = clf(data, sources, unmixing, mixing, SFREQ)
-    assert mask[3]
-
-
-def test_protect_list_mode_never_marks_protected_labels():
-    clf = ICLabelClassifier(_make_info(), use_protect_list=True)
-    data = _chunk()
-    sources = _chunk()
-    unmixing = np.eye(N_CH)
-    mixing = np.eye(N_CH)
-    labels_probs = _labels_probs(N_CH, {1: ('brain', 0.99), 4: ('other', 0.99)})
-    with patch.object(clf, '_run_icalabel', return_value=labels_probs):
-        mask = clf(data, sources, unmixing, mixing, SFREQ)
-    assert not mask[1]
-    assert not mask[4]
-
-
-def test_protect_list_mode_marks_unrecognized_label_fail_closed():
-    """The defining difference from the default fail-open mode: an unrecognized
-    label above threshold is treated as an artifact when use_protect_list=True."""
-    clf = ICLabelClassifier(_make_info(), use_protect_list=True)
-    data = _chunk()
-    sources = _chunk()
-    unmixing = np.eye(N_CH)
-    mixing = np.eye(N_CH)
-    labels_probs = _labels_probs(N_CH, {5: ('some_future_class', 0.95)})
-    with patch.object(clf, '_run_icalabel', return_value=labels_probs):
-        mask = clf(data, sources, unmixing, mixing, SFREQ)
-    assert mask[5]
-
-
-def test_default_mode_does_not_mark_unrecognized_label_fail_open():
-    """Same unrecognized label, but default (fail-open) mode must NOT mark it —
-    this is the safety property that motivated the default."""
+def test_default_mode_does_not_mark_unrecognized_label():
+    """Unrecognized labels are never rejected — the allow-list only rejects
+    labels explicitly listed in artifact_labels."""
     clf = ICLabelClassifier(_make_info())
     data = _chunk()
     sources = _chunk()
@@ -169,23 +128,6 @@ def test_custom_artifact_labels_accepts_legacy_alias_spelling():
     with patch.object(clf, '_run_icalabel', return_value=labels_probs):
         mask = clf(data, sources, unmixing, mixing, SFREQ)
     assert mask[1]
-
-
-def test_protect_labels_accepts_legacy_alias_spelling():
-    """protect_labels={'ch_noise'} must protect the canonical 'channel_noise' label."""
-    data = _chunk()
-    sources = _chunk()
-    unmixing = np.eye(N_CH)
-    mixing = np.eye(N_CH)
-    labels_probs = _labels_probs(N_CH, {1: ('channel_noise', 0.9)})
-
-    clf = ICLabelClassifier(
-        _make_info(), use_protect_list=True,
-        protect_labels={'brain', 'other', 'ch_noise'},
-    )
-    with patch.object(clf, '_run_icalabel', return_value=labels_probs):
-        mask = clf(data, sources, unmixing, mixing, SFREQ)
-    assert not mask[1]
 
 
 def test_predicted_label_alias_from_run_icalabel_is_canonicalized():

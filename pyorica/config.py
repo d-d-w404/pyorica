@@ -30,9 +30,6 @@ class PipelineConfig:
     # ICLabel's documented training assumptions; off by default to match the
     # legacy ORICA reference).
     icalabel_apply_car_bandpass: bool = False
-    # Label-selection policy: False = fail-open (reject only known artifact
-    # labels), True = fail-closed (reject everything except brain/other).
-    icalabel_use_protect_list: bool = False
     # Seconds between ICLabel runs in the online pipeline (0 = every chunk)
     classify_interval_s: float = 0.0
     # Benchmark simulation chunk size (samples per pipeline step)
@@ -82,8 +79,6 @@ class PipelineConfig:
             f"icalabel_threshold: {self.icalabel_threshold}      # probability threshold ∈ [0, 1]",
             f"icalabel_apply_car_bandpass: {str(self.icalabel_apply_car_bandpass).lower()}"
             "  # apply CAR + bandpass before classifying (default: false)",
-            f"icalabel_use_protect_list: {str(self.icalabel_use_protect_list).lower()}"
-            "      # false = fail-open, true = fail-closed protect-list",
             f"classify_interval_s: {self.classify_interval_s}     # seconds between ICLabel runs (0 = every chunk)",
             "",
             "# ── Benchmark simulation ─────────────────────────────────────────────",

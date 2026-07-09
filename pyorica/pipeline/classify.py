@@ -17,8 +17,8 @@ _DEFAULT_ARTIFACT_LABELS = frozenset(
 )
 
 # Aliases map every spelling ICLabelClassifier may see to the internal
-# canonical short names used by _DEFAULT_ARTIFACT_LABELS / artifact_labels /
-# protect_labels. This includes mne_icalabel's own multi-word label strings
+# canonical short names used by _DEFAULT_ARTIFACT_LABELS / artifact_labels.
+# This includes mne_icalabel's own multi-word label strings
 # (e.g. 'muscle artifact', as returned by label_components()) alongside
 # legacy/alternate spellings ('eog', 'ch_noise', 'muscle_artifact', ...).
 _LABEL_ALIASES = {
@@ -54,10 +54,6 @@ class ICLabelClassifier:
       1-100 Hz bandpass are applied before classification, matching ICLabel's
       documented training assumptions — off by default to match the legacy
       reference, but exposed so both settings can be benchmarked.
-    * ``use_protect_list`` controls artifact-selection semantics: off (default)
-      rejects only labels in ``artifact_labels`` (fail-open on unrecognized
-      labels); on rejects everything except ``protect_labels`` (fail-closed,
-      matches the legacy reference).
 
     Parameters
     ----------
@@ -66,14 +62,9 @@ class ICLabelClassifier:
     threshold : float
         Minimum top-1 probability required to reject an IC (default 0.7).
     artifact_labels : set of str, optional
-        Labels rejected when ``use_protect_list=False``. Defaults to
+        Labels rejected once above ``threshold``. Defaults to
         ``{'muscle', 'eye', 'heart', 'line_noise', 'channel_noise'}``. Accepts
         legacy spellings (``'eog'``, ``'ecg'``, ``'ch_noise'``).
-    protect_labels : set of str, optional
-        Labels never rejected when ``use_protect_list=True``. Defaults to
-        ``{'brain', 'other'}``.
-    use_protect_list : bool
-        See above (default False).
     apply_car_bandpass : bool
         See above (default False).
     montage : str
@@ -92,7 +83,6 @@ class ICLabelClassifier:
     """
 
     def __init__(self, info, threshold=0.7, artifact_labels=None,
-                 protect_labels=None, use_protect_list=False,
                  record_snapshots=False, apply_car_bandpass=False,
                  montage='standard_1020'):
         self._info = info
@@ -100,18 +90,12 @@ class ICLabelClassifier:
         self._montage = montage
         self._apply_car_bandpass = apply_car_bandpass
         self._threshold = threshold
-        self._use_protect_list = use_protect_list
         self._record_snapshots = record_snapshots
         self.snapshots = []
         self._artifact_labels = frozenset(
             _canonical_icalabel_label(lbl)
             for lbl in (artifact_labels if artifact_labels is not None
                         else _DEFAULT_ARTIFACT_LABELS)
-        )
-        self._protect_labels = frozenset(
-            _canonical_icalabel_label(lbl)
-            for lbl in (protect_labels if protect_labels is not None
-                        else ('brain', 'other'))
         )
 
     def __call__(self, data, sources, unmixing, mixing, sfreq):
@@ -143,10 +127,7 @@ class ICLabelClassifier:
             if prob is None or prob < self._threshold:
                 continue
             canonical = _canonical_icalabel_label(label)
-            if self._use_protect_list:
-                mask[i] = canonical not in self._protect_labels
-            else:
-                mask[i] = canonical in self._artifact_labels
+            mask[i] = canonical in self._artifact_labels
         return mask
 
     def _run_icalabel(self, data, unmixing, mixing, sfreq, n_components):
