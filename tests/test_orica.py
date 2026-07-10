@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 import os
+import warnings
 
 from pyorica.orica.core import ORICAFilter, _orica_block_ranges
 
@@ -131,6 +132,23 @@ def test_ff_profiles_diverge_from_each_other():
         "constant and adaptive profiles should not produce identical weights"
     assert not np.allclose(cooling.weights_, adaptive.weights_), \
         "cooling and adaptive profiles should not produce identical weights"
+
+
+def test_adaptive_profile_does_not_freeze_at_identity():
+    """ff_profile="adaptive" must actually adapt: _lambda_k is seeded from
+    lambda_0 (not 0), since _gen_adaptive_ff is multiplicative in that seed
+    and a 0 seed is an absorbing fixed point — lambda would stay exactly 0
+    forever, freezing weights_ at the identity and dividing by zero in
+    _dynamic_whitening's Q computation."""
+    orica = ORICAFilter(N_CH, SFREQ, ff_profile="adaptive")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        for _ in range(8):
+            orica.update(RNG.standard_normal((N_CH, CHUNK)))
+
+    assert np.all(np.isfinite(orica.weights_))
+    assert not np.allclose(orica.weights_, np.eye(N_CH)), \
+        "adaptive profile should not stay frozen at the identity matrix"
 
 
 # ── Cycle 6: wrong channel count raises ───────────────────────────────────

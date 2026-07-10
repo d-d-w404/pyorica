@@ -12,7 +12,7 @@ Numerics note
 Block partitioning, the two-pass (whiten-then-decompose) update ordering, and
 the ``constant`` forgetting-factor default are aligned with the quick30 legacy
 reference implementation (``ORICA_final_no_print_quick30.py``) rather than a
-literal reading of the paper — see ADR-0006 and ADR-0007 for why.
+literal reading of the paper — see ADR-0006, ADR-0007, and ADR-0008 for why.
 """
 
 import numpy as np
@@ -58,12 +58,11 @@ class ORICAFilter:
         * ``"cooling"`` — λ decreases over the session per ``lambda_0``/
           ``gamma``, assuming the *entire* session is stationary.
           Validation-only: for comparing against offline (batch) ICA, not
-          for real-time deployment.
+          for real-time deployment. Decays unconstrained toward 0 — not
+          floored by ``tau_const`` (see ADR-0008).
         * ``"adaptive"`` — λ responds to the non-stationarity index to
-          speed up adaptation when the data's statistics shift.
-
-        ``lambda_const`` (floored by ``tau_const``) still acts as a floor
-        under ``"cooling"`` and ``"adaptive"`` — see ``tau_const`` below.
+          speed up adaptation when the data's statistics shift, starting
+          from ``lambda_0``. Also not floored by ``tau_const``.
     block_size_white : int
         Block size for RLS whitening updates. Independent of
         ``block_size_ica``: it reflects whitening's own stationarity
@@ -72,15 +71,17 @@ class ORICAFilter:
         Block size for ICA weight updates. Independent of
         ``block_size_white`` for the same reason.
     tau_const : float
-        Local stationarity window (seconds), used to derive ``lambda_const``.
-        Under ``ff_profile="constant"`` this is the steady-state λ; under
-        ``"cooling"``/``"adaptive"`` it acts as a floor beneath which λ
-        never decays. ``inf`` → ``lambda_const = 0.0`` (no floor).
+        Local stationarity window (seconds), used to derive ``lambda_const``
+        — the steady-state λ used under ``ff_profile="constant"`` only.
+        Has no effect on ``"cooling"``/``"adaptive"``.
     gamma : float
         Decay rate for the cooling forgetting factor (``ff_profile="cooling"``
         only).
     lambda_0 : float
-        Initial forgetting factor (``ff_profile="cooling"`` only).
+        Initial forgetting factor. Used as the decay start point under
+        ``ff_profile="cooling"``, and as the initial seed for
+        ``ff_profile="adaptive"``'s feedback recursion (which is multiplicative
+        in this seed — must be nonzero, see ADR-0008).
     num_subgaussian : int
         Number of sub-Gaussian sources (default 0; EEG brain sources are
         typically super-Gaussian).
@@ -115,11 +116,14 @@ class ORICAFilter:
         self.time_perm = time_perm
         self.num_pass = num_pass
 
-        # steady-state lambda (used directly under ff_profile="constant"; acts
-        # as a floor under "cooling"/"adaptive"). tau_const=inf means "no
-        # floor" — cooling/adaptive decay toward 0 unconstrained. A nonzero
-        # floor here (e.g. quick30's 0.98) makes lam_prod = prod(1/(1-lambda))
-        # diverge within ~100 updates at typical block sizes; see ADR-0006.
+        # steady-state lambda, used only under ff_profile="constant" — see
+        # ADR-0008. Not applied to "cooling"/"adaptive"; those profiles are
+        # meant to actually decay/respond, and floor-clamping them to this
+        # value made them numerically indistinguishable from "constant" under
+        # everyday (near-stationary) data. A nonzero value here (e.g.
+        # quick30's 0.98) would still make lam_prod = prod(1/(1-lambda))
+        # diverge within ~100 updates at typical block sizes if it were ever
+        # used as a sustained floor; see ADR-0006.
         if np.isfinite(tau_const):
             self._lambda_const = 1.0 - np.exp(-1.0 / (tau_const * sfreq))
         else:
@@ -136,7 +140,11 @@ class ORICAFilter:
         self._counter = 0
         self._Rn = None                         # leaky average for NSI
         self._min_non_stat_idx = None           # running min ||Rn||_F, for adaptive ff
-        self._lambda_k = np.zeros(1)             # most recent lambda block, adaptive ff
+        # most recent lambda block, adaptive ff. Seeded to lambda_0 (not 0):
+        # _gen_adaptive_ff is multiplicative in this seed, so a 0 seed is an
+        # absorbing fixed point — lambda would stay exactly 0 forever, freezing
+        # weight updates and dividing by zero in _dynamic_whitening. See ADR-0008.
+        self._lambda_k = np.array([lambda_0], dtype=np.float64)
 
     # ------------------------------------------------------------------
     # Public attributes
@@ -265,13 +273,9 @@ class ORICAFilter:
                 ratio = float(
                     np.linalg.norm(self._Rn, "fro") / self._min_non_stat_idx
                 )
-            lam = self._gen_adaptive_ff(data_range_1idx, self._lambda_k, ratio)
-        else:
-            lam = self._gen_cooling_ff(self._counter + data_range_1idx)
+            return self._gen_adaptive_ff(data_range_1idx, self._lambda_k, ratio)
 
-        if lam[0] < self._lambda_const:
-            return np.full(len(data_range_1idx), self._lambda_const)
-        return lam
+        return self._gen_cooling_ff(self._counter + data_range_1idx)
 
     # ------------------------------------------------------------------
     # Block updates

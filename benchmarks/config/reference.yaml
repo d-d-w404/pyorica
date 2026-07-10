@@ -22,39 +22,39 @@ asr_calibration_seconds: 120.0  # seconds of IIR-filtered session lead-in used t
 
 # ── ORICA (Online Recursive ICA) ─────────────────────────────────────────────
 # Forgetting factor (λ) profile — pick one of three, then only that profile's
-# subsection below is active:
+# subsection below is active. tau_const only affects "constant"; it does not
+# floor "cooling"/"adaptive" (see ADR-0008 — an earlier design floored λ under
+# all three profiles, which made cooling/adaptive numerically collapse into
+# constant under everyday near-stationary data):
 #   "constant" (default) — λ pinned to the tau_const-derived steady-state
 #                           value for the whole session. Assumes data is
 #                           stationary within the tau_const window. The
 #                           production / real-time setting.
 #   "cooling"             — λ decreases across the whole session per
-#                           lambda_0/gamma. Assumes the *entire* session is
-#                           stationary. Validation-only: for comparing
-#                           against offline (batch) ICA, not real-time use.
-#   "adaptive"            — λ responds to the running non-stationarity index,
-#                           speeding up adaptation when the data's statistics
-#                           shift. No exposed tuning parameters (see below).
+#                           lambda_0/gamma, decaying unconstrained toward 0.
+#                           Assumes the *entire* session is stationary.
+#                           Validation-only: for comparing against offline
+#                           (batch) ICA, not real-time use.
+#   "adaptive"            — λ starts at lambda_0 and responds to the running
+#                           non-stationarity index, growing when the data's
+#                           statistics shift and otherwise decaying. No
+#                           additional exposed tuning parameters (see below).
 orica_ff_profile: "constant"
 
 orica_block_size_white: 32      # samples per RLS whitening update
 orica_block_size_ica: 32        # samples per ICA weight update
-orica_num_subgaussian: 0        # ICs assumed sub-Gaussian (0 = all super-Gaussian)
-
-# forgetting factor — shared by all three profiles
-orica_tau_const: 3.0             # stationarity window (seconds); steady-state λ = 1-exp(-1/(tau×sfreq)).
-                                  # Used directly as λ under "constant"; acts as a floor beneath which λ
-                                  # never decays under "cooling"/"adaptive". .inf = no floor.
+orica_num_subgaussian: 1        # ICs assumed sub-Gaussian (0 = all super-Gaussian)
 
 # forgetting factor — "constant" profile only
-# (no additional parameters beyond orica_tau_const above)
+orica_tau_const: 3.0             # stationarity window (seconds); steady-state λ = 1-exp(-1/(tau×sfreq)); .inf = λ=0
 
-# forgetting factor — "cooling" profile only (ignored under "constant"/"adaptive")
-orica_lambda_0: 0.00133          # initial forgetting factor λ₀ ∈ (0, 1)
-orica_gamma: 0.6                 # cooling decay rate
+# forgetting factor — "cooling" and "adaptive" profiles (ignored under "constant")
+orica_lambda_0: 0.995             # initial forgetting factor λ₀ ∈ (0, 1); decay start (cooling) / recursion seed (adaptive)
+orica_gamma: 0.6                  # cooling decay rate — cooling only, ignored under adaptive
 
-# forgetting factor — "adaptive" profile only
-# No exposed parameters — internal tuning constants (decay rate, upper bound,
-# transition-band width/center) are fixed in ORICAFilter._gen_adaptive_ff.
+# forgetting factor — "adaptive" profile: no additional exposed parameters —
+# internal tuning constants (decay rate, upper bound, transition-band
+# width/center) are fixed in ORICAFilter._gen_adaptive_ff.
 
 # ── ICLabel artifact classifier ───────────────────────────────────────────────
 icalabel_threshold: 0.7         # probability threshold ∈ [0, 1]

@@ -59,8 +59,8 @@ Key parameters in `reference.yaml`:
 | `asr_cutoff` | `20.0` | SD multiplier |
 | `asr_calibration_seconds` | `120.0` | first 2 min of session |
 | `orica_ff_profile` | `constant` | λ pinned to the `orica_tau_const`-derived steady-state value for the whole session — same as the `PipelineConfig` default |
-| `orica_tau_const` | `3.0` | steady-state λ = 1 − exp(−1/(3 × sfreq)) |
-| `orica_lambda_0`, `orica_gamma` | `0.00133`, `0.6` | cooling-profile-only, inert under `orica_ff_profile: constant`; kept at their tuned values in case this config is switched to `"cooling"` for validation against offline ICA |
+| `orica_tau_const` | `3.0` | steady-state λ = 1 − exp(−1/(3 × sfreq)); `"constant"` profile only, no effect on cooling/adaptive |
+| `orica_lambda_0`, `orica_gamma` | `0.995`, `0.6` | cooling/adaptive only, ignored under `orica_ff_profile: constant`; original (`PipelineConfig`-default) values, so switching this config to `"cooling"` or `"adaptive"` for validation actually decays/responds instead of collapsing into constant behavior |
 | `orica_block_size_white/ica` | `32` | samples per ORICA update block |
 | `icalabel_threshold` | `0.7` | artifact rejection probability |
 | `icalabel_apply_car_bandpass` | `false` | apply CAR + 1–100 Hz bandpass before classifying (see below) |
