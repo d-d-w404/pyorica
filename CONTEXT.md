@@ -35,8 +35,11 @@ An IC classified as non-brain (e.g. eye movement, muscle, line noise) by the cla
 _Avoid_: bad component, EOG component, noise IC
 
 **Forgetting factor (λ)**:
-A scalar in `(0, 1)` that controls how fast ORICA adapts to non-stationary data. Profiles: `cooling` (decreasing), `constant`, `adaptive`.
-_Avoid_: learning rate, decay rate
+A scalar in `(0, 1)` that controls how fast ORICA adapts to non-stationary data. `tau_const` (stationarity window, seconds) always sets a floor on λ, regardless of profile. Profiles:
+- `constant` (default) — λ is pinned to the floor value derived from `tau_const`; assumes data is stationary within that window. The production/real-time setting.
+- `cooling` — λ decreases over the session per `lambda_0`/`gamma`, assuming the entire session is stationary. Validation-only: used to compare against offline (batch) ICA, not for real-time deployment.
+- `adaptive` — λ responds to the non-stationarity index (`_Rn`) to speed up adaptation when the data's statistics shift. Enhances learning when nonstationarity happens.
+_Avoid_: learning rate, decay rate, force_constant_lambda (removed — superseded by the `constant` profile, see [ADR-0007](docs/adr/0007-forgetting-factor-profile-consolidation.md))
 
 ### Pipeline
 

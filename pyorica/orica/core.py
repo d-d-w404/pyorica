@@ -10,9 +10,9 @@ Engineering, 24(3), 309-319.
 Numerics note
 -------------
 Block partitioning, the two-pass (whiten-then-decompose) update ordering, and
-the ``force_constant_lambda`` default are aligned with the quick30 legacy
+the ``constant`` forgetting-factor default are aligned with the quick30 legacy
 reference implementation (``ORICA_final_no_print_quick30.py``) rather than a
-literal reading of the paper — see ADR-0006 for why.
+literal reading of the paper — see ADR-0006 and ADR-0007 for why.
 """
 
 import numpy as np
@@ -48,9 +48,22 @@ class ORICAFilter:
         Number of EEG channels / independent components.
     sfreq : float
         Sampling frequency in Hz.
-    ff_profile : {'cooling', 'constant', 'adaptive'}
-        Forgetting-factor profile. Only takes effect when
-        ``force_constant_lambda=False`` — see below.
+    ff_profile : {'constant', 'cooling', 'adaptive'}
+        Forgetting-factor profile:
+
+        * ``"constant"`` (default) — λ is pinned to ``lambda_const``
+          (derived from ``tau_const``), assuming data is stationary within
+          that window. The production / real-time setting; matches
+          quick30's real-time behavior.
+        * ``"cooling"`` — λ decreases over the session per ``lambda_0``/
+          ``gamma``, assuming the *entire* session is stationary.
+          Validation-only: for comparing against offline (batch) ICA, not
+          for real-time deployment.
+        * ``"adaptive"`` — λ responds to the non-stationarity index to
+          speed up adaptation when the data's statistics shift.
+
+        ``lambda_const`` (floored by ``tau_const``) still acts as a floor
+        under ``"cooling"`` and ``"adaptive"`` — see ``tau_const`` below.
     block_size_white : int
         Block size for RLS whitening updates. Independent of
         ``block_size_ica``: it reflects whitening's own stationarity
@@ -59,20 +72,18 @@ class ORICAFilter:
         Block size for ICA weight updates. Independent of
         ``block_size_white`` for the same reason.
     tau_const : float
-        Local stationarity window (seconds). ``inf`` → ``lambda_const = 0.98``.
+        Local stationarity window (seconds), used to derive ``lambda_const``.
+        Under ``ff_profile="constant"`` this is the steady-state λ; under
+        ``"cooling"``/``"adaptive"`` it acts as a floor beneath which λ
+        never decays. ``inf`` → ``lambda_const = 0.0`` (no floor).
     gamma : float
-        Decay rate for the cooling forgetting factor.
+        Decay rate for the cooling forgetting factor (``ff_profile="cooling"``
+        only).
     lambda_0 : float
-        Initial forgetting factor (cooling profile).
+        Initial forgetting factor (``ff_profile="cooling"`` only).
     num_subgaussian : int
         Number of sub-Gaussian sources (default 0; EEG brain sources are
         typically super-Gaussian).
-    force_constant_lambda : bool
-        When True (default), every update uses ``lambda_const`` regardless of
-        ``ff_profile`` — matches quick30's real-time behavior. Set False to
-        let ``ff_profile="cooling"`` (stationary validation) or
-        ``"adaptive"`` (nonstationary real-time) actually drive the
-        forgetting factor.
     time_perm : bool
         Randomly permute sample order during the ICA pass (quick30 option).
     num_pass : int
@@ -83,14 +94,13 @@ class ORICAFilter:
         self,
         n_components: int,
         sfreq: float,
-        ff_profile: str = "cooling",
+        ff_profile: str = "constant",
         block_size_white: int = 8,
         block_size_ica: int = 8,
         tau_const: float = 3.0,
         gamma: float = 0.6,
         lambda_0: float = 0.995,
         num_subgaussian: int = 0,
-        force_constant_lambda: bool = True,
         time_perm: bool = False,
         num_pass: int = 1,
     ) -> None:
@@ -102,14 +112,14 @@ class ORICAFilter:
         self.tau_const = tau_const
         self.gamma = gamma
         self.lambda_0 = lambda_0
-        self.force_constant_lambda = force_constant_lambda
         self.time_perm = time_perm
         self.num_pass = num_pass
 
-        # steady-state lambda. tau_const=inf means "no steady-state floor" —
-        # cooling/adaptive decay toward 0 unconstrained. A nonzero floor here
-        # (e.g. quick30's 0.98) makes lam_prod = prod(1/(1-lambda)) diverge
-        # within ~100 updates at typical block sizes; see ADR-0006.
+        # steady-state lambda (used directly under ff_profile="constant"; acts
+        # as a floor under "cooling"/"adaptive"). tau_const=inf means "no
+        # floor" — cooling/adaptive decay toward 0 unconstrained. A nonzero
+        # floor here (e.g. quick30's 0.98) makes lam_prod = prod(1/(1-lambda))
+        # diverge within ~100 updates at typical block sizes; see ADR-0006.
         if np.isfinite(tau_const):
             self._lambda_const = 1.0 - np.exp(-1.0 / (tau_const * sfreq))
         else:
@@ -246,6 +256,9 @@ class ORICAFilter:
 
     def _forgetting_factor(self, data_range_1idx: np.ndarray) -> np.ndarray:
         """Per-sample λ for the current block (1-indexed ``data_range``)."""
+        if self.ff_profile == "constant":
+            return np.full(len(data_range_1idx), self._lambda_const)
+
         if self.ff_profile == "adaptive" and self._Rn is not None:
             ratio = 1.0
             if self._min_non_stat_idx is not None and self._min_non_stat_idx > 0:
@@ -255,9 +268,6 @@ class ORICAFilter:
             lam = self._gen_adaptive_ff(data_range_1idx, self._lambda_k, ratio)
         else:
             lam = self._gen_cooling_ff(self._counter + data_range_1idx)
-
-        if self.force_constant_lambda or self.ff_profile == "constant":
-            return np.full(len(data_range_1idx), self._lambda_const)
 
         if lam[0] < self._lambda_const:
             return np.full(len(data_range_1idx), self._lambda_const)

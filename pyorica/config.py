@@ -17,7 +17,7 @@ class PipelineConfig:
     asr_cutoff: float = 20.0
     asr_calibration_seconds: float = 120.0
     # ORICA
-    orica_ff_profile: str = "cooling"
+    orica_ff_profile: str = "constant"
     orica_block_size_white: int = 8
     orica_block_size_ica: int = 8
     orica_lambda_0: float = 0.995
@@ -65,15 +65,17 @@ class PipelineConfig:
             f"asr_calibration_seconds: {self.asr_calibration_seconds}  # seconds of IIR-filtered data used to calibrate ASR",
             "",
             "# ── ORICA (Online Recursive ICA) ────────────────────────────────────",
-            '# Forgetting factor profile: "cooling" (λ decreases over time),',
-            '# "constant", or "adaptive".',
+            '# Forgetting factor profile: "constant" (default; λ pinned to the',
+            '# tau_const-derived floor — production/real-time setting), "cooling"',
+            '# (λ decreases over the session; validation-only, vs offline ICA), or',
+            '# "adaptive" (λ responds to non-stationarity).',
             f'orica_ff_profile: "{self.orica_ff_profile}"       # forgetting factor schedule',
             f"orica_block_size_white: {self.orica_block_size_white}       # samples per RLS whitening update",
             f"orica_block_size_ica: {self.orica_block_size_ica}         # samples per ICA weight update",
-            f"orica_lambda_0: {self.orica_lambda_0}       # initial forgetting factor λ₀ ∈ (0, 1)",
-            f"orica_gamma: {self.orica_gamma}           # cooling decay rate (used when ff_profile=cooling)",
+            f"orica_lambda_0: {self.orica_lambda_0}       # initial forgetting factor λ₀ ∈ (0, 1) — cooling only, ignored otherwise",
+            f"orica_gamma: {self.orica_gamma}           # cooling decay rate — cooling only, ignored otherwise",
             f"orica_num_subgaussian: {self.orica_num_subgaussian}    # ICs assumed sub-Gaussian (0 = all super-Gaussian)",
-            f"orica_tau_const: {tau}        # local stationarity window (seconds); steady-state λ = 1-exp(-1/(tau×sfreq)); .inf = global",
+            f"orica_tau_const: {tau}        # stationarity window (seconds); steady-state λ = 1-exp(-1/(tau×sfreq)); floor on λ under all profiles; .inf = no floor",
             "",
             "# ── ICLabel artifact classifier ─────────────────────────────────────",
             "# ICs with artifact probability above this threshold are zeroed.",

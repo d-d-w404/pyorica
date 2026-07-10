@@ -110,41 +110,27 @@ def test_update_processes_all_samples_with_unequal_block_sizes():
     assert orica._counter - counter_before == 100
 
 
-# ── Cycle 6: force_constant_lambda overrides ff_profile ──────────────────
+# ── Cycle 6: ff_profile selects mutually-exclusive λ behavior ────────────
 
-def test_force_constant_lambda_makes_ff_profile_irrelevant():
-    """With force_constant_lambda=True (default), cooling and adaptive profiles
-    must evolve identically — the profile choice becomes dead configuration."""
+def test_ff_profiles_diverge_from_each_other():
+    """constant, cooling, and adaptive are independent paths (no override
+    flag) — each must produce distinct weights/sphere over the same data."""
     chunks = [RNG.standard_normal((N_CH, CHUNK)) for _ in range(8)]
 
+    constant = ORICAFilter(N_CH, SFREQ, ff_profile="constant")
     cooling = ORICAFilter(N_CH, SFREQ, ff_profile="cooling")
     adaptive = ORICAFilter(N_CH, SFREQ, ff_profile="adaptive")
     for chunk in chunks:
+        constant.update(chunk.copy())
         cooling.update(chunk.copy())
         adaptive.update(chunk.copy())
 
-    np.testing.assert_allclose(cooling.weights_, adaptive.weights_)
-    np.testing.assert_allclose(cooling.sphere_, adaptive.sphere_)
-
-
-def test_force_constant_lambda_false_restores_adaptive_profile():
-    """With force_constant_lambda=False, ff_profile="adaptive" must diverge
-    from the constant-lambda path instead of silently falling back to it."""
-    chunks = [RNG.standard_normal((N_CH, CHUNK)) for _ in range(8)]
-
-    constant = ORICAFilter(
-        N_CH, SFREQ, ff_profile="constant", force_constant_lambda=False
-    )
-    adaptive = ORICAFilter(
-        N_CH, SFREQ, ff_profile="adaptive", force_constant_lambda=False
-    )
-    for chunk in chunks:
-        constant.update(chunk.copy())
-        adaptive.update(chunk.copy())
-
+    assert not np.allclose(constant.weights_, cooling.weights_), \
+        "constant and cooling profiles should not produce identical weights"
     assert not np.allclose(constant.weights_, adaptive.weights_), \
-        "adaptive ff_profile should diverge from constant-lambda when " \
-        "force_constant_lambda=False"
+        "constant and adaptive profiles should not produce identical weights"
+    assert not np.allclose(cooling.weights_, adaptive.weights_), \
+        "cooling and adaptive profiles should not produce identical weights"
 
 
 # ── Cycle 6: wrong channel count raises ───────────────────────────────────
@@ -204,9 +190,9 @@ def test_cross_talk_error_on_sim_stat():
     n_ch = data.shape[0]
 
     # params matching testScript.m: online whitening, block=8, cooling, localstat=Inf.
-    # force_constant_lambda=False: this test validates the cooling profile
-    # itself (stationary-data assumption) against the MATLAB reference, not
-    # the force-constant real-time default.
+    # ff_profile="cooling": this test validates the cooling profile itself
+    # (stationary-data assumption) against the MATLAB reference, not the
+    # constant-lambda real-time default.
     orica = ORICAFilter(
         n_components=n_ch,
         sfreq=sfreq,
@@ -216,7 +202,6 @@ def test_cross_talk_error_on_sim_stat():
         tau_const=np.inf,
         gamma=0.6,
         lambda_0=0.995,
-        force_constant_lambda=False,
     )
 
     chunk_size = 8
