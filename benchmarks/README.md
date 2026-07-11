@@ -58,8 +58,9 @@ Key parameters in `reference.yaml`:
 | `asr_backend` | `asrpy` | matches `SN_Driveasrpy20_2min_70` reference |
 | `asr_cutoff` | `20.0` | SD multiplier |
 | `asr_calibration_seconds` | `120.0` | first 2 min of session |
-| `orica_lambda_0` | `0.00133` | initial forgetting factor ≈ steady-state λ (constant slow adaptation) |
-| `orica_tau_const` | `3.0` | steady-state λ = 1 − exp(−1/(3 × sfreq)) |
+| `orica_ff_profile` | `constant` | λ pinned to the `orica_tau_const`-derived steady-state value for the whole session — same as the `PipelineConfig` default |
+| `orica_tau_const` | `3.0` | steady-state λ = 1 − exp(−1/(3 × sfreq)); `"constant"` profile only, no effect on cooling/adaptive |
+| `orica_lambda_0`, `orica_gamma` | `0.995`, `0.6` | cooling/adaptive only, ignored under `orica_ff_profile: constant`; original (`PipelineConfig`-default) values, so switching this config to `"cooling"` or `"adaptive"` for validation actually decays/responds instead of collapsing into constant behavior |
 | `orica_block_size_white/ica` | `32` | samples per ORICA update block |
 | `icalabel_threshold` | `0.7` | artifact rejection probability |
 | `icalabel_apply_car_bandpass` | `false` | apply CAR + 1–100 Hz bandpass before classifying (see below) |
@@ -85,6 +86,8 @@ To create a custom config based on current defaults:
 from pyorica.config import PipelineConfig
 PipelineConfig().to_yaml("my_config.yaml")
 ```
+
+`PipelineConfig()` defaults to `orica_ff_profile: "constant"` and `orica_block_size_white/ica: 8` — differing from `reference.yaml` only in block size, since both now use the `"constant"` profile. Any script invocation that omits `--config` (e.g. `run_validation.py` without the flag) falls back to these defaults, not to `reference.yaml`.
 
 ---
 

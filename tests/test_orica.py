@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 import os
+import warnings
 
 from pyorica.orica.core import ORICAFilter, _orica_block_ranges
 
@@ -101,6 +102,55 @@ def test_update_processes_all_samples_when_chunk_not_multiple_of_block():
     assert orica._counter - counter_before == 70
 
 
+def test_update_processes_all_samples_with_unequal_block_sizes():
+    """block_size_white and block_size_ica are independent stationarity knobs;
+    the ICA pass must cover every sample even when they differ."""
+    orica = ORICAFilter(N_CH, SFREQ, block_size_white=25, block_size_ica=8)
+    counter_before = orica._counter
+    orica.update(RNG.standard_normal((N_CH, 100)))
+    assert orica._counter - counter_before == 100
+
+
+# ── Cycle 6: ff_profile selects mutually-exclusive λ behavior ────────────
+
+def test_ff_profiles_diverge_from_each_other():
+    """constant, cooling, and adaptive are independent paths (no override
+    flag) — each must produce distinct weights/sphere over the same data."""
+    chunks = [RNG.standard_normal((N_CH, CHUNK)) for _ in range(8)]
+
+    constant = ORICAFilter(N_CH, SFREQ, ff_profile="constant")
+    cooling = ORICAFilter(N_CH, SFREQ, ff_profile="cooling")
+    adaptive = ORICAFilter(N_CH, SFREQ, ff_profile="adaptive")
+    for chunk in chunks:
+        constant.update(chunk.copy())
+        cooling.update(chunk.copy())
+        adaptive.update(chunk.copy())
+
+    assert not np.allclose(constant.weights_, cooling.weights_), \
+        "constant and cooling profiles should not produce identical weights"
+    assert not np.allclose(constant.weights_, adaptive.weights_), \
+        "constant and adaptive profiles should not produce identical weights"
+    assert not np.allclose(cooling.weights_, adaptive.weights_), \
+        "cooling and adaptive profiles should not produce identical weights"
+
+
+def test_adaptive_profile_does_not_freeze_at_identity():
+    """ff_profile="adaptive" must actually adapt: _lambda_k is seeded from
+    lambda_0 (not 0), since _gen_adaptive_ff is multiplicative in that seed
+    and a 0 seed is an absorbing fixed point — lambda would stay exactly 0
+    forever, freezing weights_ at the identity and dividing by zero in
+    _dynamic_whitening's Q computation."""
+    orica = ORICAFilter(N_CH, SFREQ, ff_profile="adaptive")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        for _ in range(8):
+            orica.update(RNG.standard_normal((N_CH, CHUNK)))
+
+    assert np.all(np.isfinite(orica.weights_))
+    assert not np.allclose(orica.weights_, np.eye(N_CH)), \
+        "adaptive profile should not stay frozen at the identity matrix"
+
+
 # ── Cycle 6: wrong channel count raises ───────────────────────────────────
 
 def test_update_wrong_channels_raises():
@@ -157,7 +207,10 @@ def test_cross_talk_error_on_sim_stat():
     data, A_true, sfreq = _load_sim_dataset()
     n_ch = data.shape[0]
 
-    # params matching testScript.m: online whitening, block=8, cooling, localstat=Inf
+    # params matching testScript.m: online whitening, block=8, cooling, localstat=Inf.
+    # ff_profile="cooling": this test validates the cooling profile itself
+    # (stationary-data assumption) against the MATLAB reference, not the
+    # constant-lambda real-time default.
     orica = ORICAFilter(
         n_components=n_ch,
         sfreq=sfreq,
