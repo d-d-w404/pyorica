@@ -43,7 +43,7 @@ orica_ff_profile: "constant"
 
 orica_block_size_white: 32      # samples per RLS whitening update
 orica_block_size_ica: 32        # samples per ICA weight update
-orica_num_subgaussian: 1        # ICs assumed sub-Gaussian (0 = all super-Gaussian)
+orica_num_subgaussian: 0        # ICs assumed sub-Gaussian (0 = all super-Gaussian)
 
 # forgetting factor — "constant" profile only
 orica_tau_const: 3.0             # stationarity window (seconds); steady-state λ = 1-exp(-1/(tau×sfreq)); .inf = λ=0
